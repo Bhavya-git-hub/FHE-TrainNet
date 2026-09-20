@@ -1,0 +1,63 @@
+# Cloud Mode - sized for a ~1 GB hosting tier (Streamlit Community Cloud).
+#
+# The constraint that shapes this file is memory, and the culprit is Galois
+# rotation keys. Measured on the demo configuration at n=16384:
+#
+#     with Galois keys     1901 MB, 23.5 s key generation
+#     without Galois keys   105 MB,  8.1 s key generation
+#
+# That is 95% of the process footprint for one feature: the cross-slot reduction
+# that sums a gradient across a mini-batch. A batch of ONE has nothing to reduce,
+# so the trainer skips it and the keys are never generated.
+#
+# What that buys, and what it costs:
+#   + runs in roughly a tenth of the memory, inside a 1 GB tier
+#   + keeps n=16384 and a 35-bit scale, so precision stays honest (~20 bits)
+#   + keeps a real depth budget, so adaptive and fixed genuinely differ
+#   - one sample per training step instead of a batch, so throughput is lower;
+#     the sample count and epoch count below are reduced to compensate
+#
+# A degree-3 activation costs 4 levels per step here (2 + 2, no reduction)
+# against a 10-level chain, so two steps fit between refreshes - the same
+# structure the local demo has, at a fraction of the memory.
+#
+# The learning rate is 0.05, not the 0.3 the batched demo uses, and that is a
+# correctness requirement rather than tuning. The update is scaled by lr/B, so at
+# B=1 each step is 32x larger than at B=32. Carried over unchanged, 0.3 drove the
+# pre-activation past the degree-3 polynomial's monotone limit, the gradient
+# inverted and accuracy collapsed to 0.417 with an overflow warning. Measured at
+# B=1: 0.3 diverges, 0.05 is stable at 0.833 with max|z| = 1.16.
+#
+# measure_every is 2 because each capacity reading costs a serialization and a
+# canary decryption, which is material when a step is only a few operations long.
+name: cloud
+dataset: iris_binary
+n_samples: 20
+test_fraction: 0.3
+feature_range: 3.0
+split_seed: 20260916
+
+activation: sigmoid_deg3
+learning_rate: 0.05
+batch_size: 1
+epochs: 1
+init_scale: 0.1
+model_seed: 20260916
+
+poly_modulus_degree: 16384
+coeff_mod_bit_sizes: [45, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 40]
+scale_bits: 35
+
+baseline_interval: 1
+adaptive_safety_margin: 0
+adaptive_min_precision_bits: null
+
+modes: [plaintext, fhe_baseline, fhe_adaptive]
+trials: 1
+measure_every: 2
+use_canary: true
+max_seconds_per_run: 600.0
+notes: >-
+  Memory-constrained profile for free-tier hosting. Batch size 1 removes the need
+  for Galois rotation keys, cutting the context from ~1900 MB to ~105 MB while
+  keeping the ring dimension, the scale and the depth budget intact.

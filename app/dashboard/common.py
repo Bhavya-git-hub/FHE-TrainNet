@@ -24,6 +24,7 @@ from src.data.loader import available_datasets  # noqa: E402
 from src.experiments.config import ExperimentConfig, Mode  # noqa: E402
 from src.model.activation import ACTIVATIONS  # noqa: E402
 from src.noise.monitor import METRIC_DISCLAIMER, METRIC_NAME  # noqa: E402
+from src.runtime import default_config_path, profile_note  # noqa: E402
 
 PAGE_ICON = "🔐"
 
@@ -78,10 +79,22 @@ def metric_note() -> None:
 
 
 def get_config() -> ExperimentConfig:
-    """The configuration currently being edited, held in session state."""
+    """The configuration currently being edited, held in session state.
+
+    The starting profile is chosen from the memory this process can actually see,
+    because the batched profile needs ~1.9 GB for rotation keys and a 1 GB hosting
+    tier will kill it mid-demonstration. See `src.runtime`.
+    """
     if "config" not in st.session_state:
-        st.session_state.config = ExperimentConfig.load(ROOT / "configs" / "demo.yaml")
+        st.session_state.config = ExperimentConfig.load(default_config_path())
     return st.session_state.config
+
+
+def profile_banner() -> None:
+    """Say so when a reduced profile was selected, and why."""
+    note = profile_note()
+    if note:
+        st.caption(note)
 
 
 def set_config(config: ExperimentConfig) -> None:
@@ -121,10 +134,19 @@ def sidebar_controls() -> ExperimentConfig:
             f"max error vs sigmoid {act.approximation_error()['max_abs_error']:.4f}"
         )
         data["learning_rate"] = st.slider("Learning rate", 0.05, 3.0, config.learning_rate, 0.05)
+        batch_options = [1, 8, 16, 32, 64, 128]
         data["batch_size"] = st.select_slider(
-            "Batch size (ciphertext slots used)", [8, 16, 32, 64, 128],
-            value=config.batch_size if config.batch_size in (8, 16, 32, 64, 128) else 32,
+            "Batch size (ciphertext slots used)", batch_options,
+            value=config.batch_size if config.batch_size in batch_options else 32,
+            help="1 processes a single sample per step. That skips the cross-slot "
+                 "reduction, which is the only operation needing Galois rotation keys - "
+                 "measured at 1901 MB against 105 MB without them. Slower per sample, but "
+                 "it is what fits a 1 GB host.",
         )
+        if data["batch_size"] == 1:
+            st.caption(
+                "Batch 1: no rotation keys, ~105 MB context, one level cheaper per step."
+            )
         data["epochs"] = st.slider("Epochs", 1, 20, config.epochs)
 
         st.subheader("CKKS parameters")

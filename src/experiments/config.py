@@ -115,13 +115,16 @@ class ExperimentConfig:
         before waiting for the failure.
         """
         params = self.ckks_params()
-        per_step = self.model_config(1).depth_per_step()
+        # The batch width changes the cost: a single slot skips the cross-slot
+        # reduction, so a step costs one level less and needs no Galois keys.
+        per_step = self.model_config(1).depth_per_step(self.batch_size)
         return {
             "max_depth": params.max_depth,
             "depth_per_step": per_step,
             "steps_between_refresh": params.max_depth // per_step if per_step else None,
             "baseline_interval": self.baseline_interval,
             "baseline_is_feasible": self.baseline_interval * per_step <= params.max_depth,
+            "needs_rotation_keys": self.batch_size != 1,
         }
 
     def to_dict(self) -> dict[str, Any]:

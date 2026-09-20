@@ -1,0 +1,13 @@
+index,label,iteration,epoch,levels_consumed,levels_remaining,max_depth,serialized_bytes,measured_levels,precision_bits,state,consistent,timestamp,elapsed_seconds,provenance,fraction_remaining
+0,epoch0.step0.pre,0,0,0,10,10,1961357,0,24.5455337376822,safe,True,1789617098.186503,2.394941199999721,"{'levels_remaining': 'derived', 'serialized_bytes': 'measured', 'precision_bits': 'measured'}",1.0
+1,epoch0.step1.pre,1,0,5,5,10,1091000,5,12.477115913794005,critical,True,1789617104.4874854,8.696763699999792,"{'levels_remaining': 'derived', 'serialized_bytes': 'measured', 'precision_bits': 'measured'}",0.5
+2,epoch1.step2.pre,2,1,5,5,10,1091687,5,12.475614490354419,critical,True,1789617110.3417609,14.55106079999996,"{'levels_remaining': 'derived', 'serialized_bytes': 'measured', 'precision_bits': 'measured'}",0.5
+3,epoch1.step3.pre,3,1,5,5,10,1091837,5,12.477164112229874,critical,True,1789617115.291171,19.50046949999978,"{'levels_remaining': 'derived', 'serialized_bytes': 'measured', 'precision_bits': 'measured'}",0.5
+4,epoch2.step4.pre,4,2,5,5,10,1090617,5,12.474120008771154,critical,True,1789617120.235989,24.445287799999733,"{'levels_remaining': 'derived', 'serialized_bytes': 'measured', 'precision_bits': 'measured'}",0.5
+5,epoch2.step5.pre,5,2,5,5,10,1091146,5,12.475038738757116,critical,True,1789617125.0062761,29.215573399999812,"{'levels_remaining': 'derived', 'serialized_bytes': 'measured', 'precision_bits': 'measured'}",0.5
+6,epoch3.step6.pre,6,3,5,5,10,1090978,5,12.477729096786048,critical,True,1789617129.7041264,33.91342599999962,"{'levels_remaining': 'derived', 'serialized_bytes': 'measured', 'precision_bits': 'measured'}",0.5
+7,epoch3.step7.pre,7,3,5,5,10,1090743,5,12.476071316808536,critical,True,1789617134.0806563,38.28995529999975,"{'levels_remaining': 'derived', 'serialized_bytes': 'measured', 'precision_bits': 'measured'}",0.5
+8,epoch4.step8.pre,8,4,5,5,10,1091470,5,12.475958887461246,critical,True,1789617138.9350133,43.14431169999989,"{'levels_remaining': 'derived', 'serialized_bytes': 'measured', 'precision_bits': 'measured'}",0.5
+9,epoch4.step9.pre,9,4,5,5,10,1090839,5,12.477100420747057,critical,True,1789617143.856593,48.06589159999976,"{'levels_remaining': 'derived', 'serialized_bytes': 'measured', 'precision_bits': 'measured'}",0.5
+10,epoch5.step10.pre,10,5,5,5,10,1090925,5,12.47438949495637,critical,True,1789617148.379147,52.58844539999973,"{'levels_remaining': 'derived', 'serialized_bytes': 'measured', 'precision_bits': 'measured'}",0.5
+11,epoch5.step11.pre,11,5,5,5,10,1091157,5,12.477294477033825,critical,True,1789617152.737255,56.946553499999936,"{'levels_remaining': 'derived', 'serialized_bytes': 'measured', 'precision_bits': 'measured'}",0.5

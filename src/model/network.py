@@ -55,11 +55,11 @@ class ModelConfig:
     def activation_fn(self) -> PolynomialActivation:
         return get_activation(self.activation)
 
-    def depth_per_step(self) -> int:
+    def depth_per_step(self, slots: int | None = None) -> int:
         """Modulus levels one encrypted training step consumes.
 
-        Derived from the operation sequence in `EncryptedTrainer.step`, and
-        confirmed by measurement (5 for a degree-3 activation):
+        Derived from the operation sequence in `EncryptedTrainer._step`, and
+        confirmed by measurement (5 for a degree-3 activation at batch > 1):
 
             1  z = sum_j w_j * X_j          ciphertext x ciphertext
             +d a = polyval(z)               d = activation depth cost
@@ -68,12 +68,33 @@ class ModelConfig:
             1  .mm(ones)                    replicated sum, ciphertext x plaintext
             0  w_j <- w_j - grad_j          addition is free
 
+        **A batch of one costs a level less.** The `mm` is only there to sum a
+        gradient across the batch slots and hand it back replicated; with a single
+        occupied slot that sum is the identity, so the step skips it entirely and
+        costs `2 + activation_depth`.
+
+        That is not a micro-optimisation. `mm` is the only operation in the
+        training loop needing Galois rotation keys, and those keys measured
+        1901 MB against 105 MB for the same context without them - 95% of the
+        process footprint. Dropping to a single slot is what lets this run inside
+        a 1 GB hosting tier at a ring dimension that keeps the precision honest.
+        The trade is throughput: one sample per step instead of a whole batch.
+
         The adaptive controller uses this to decide whether the *next* step fits
         in what is left, which is what lets it refresh just in time instead of
         early. `CapacityMonitor` checks the prediction against measured ciphertext
         size, so an error here surfaces as a mismatch rather than a wrong answer.
         """
-        return 3 + self.activation_fn.depth_cost
+        reduction = 0 if slots == 1 else 1
+        return 2 + reduction + self.activation_fn.depth_cost
+
+    @property
+    def needs_rotation_keys(self) -> bool:
+        """Whether this configuration requires Galois keys at all.
+
+        Only the cross-slot reduction needs them, so a batch of one does not.
+        """
+        return self.batch_size != 1
 
     def to_dict(self) -> dict[str, Any]:
         act = self.activation_fn
@@ -87,7 +108,8 @@ class ModelConfig:
             "epochs": self.epochs,
             "init_scale": self.init_scale,
             "seed": self.seed,
-            "depth_per_step": self.depth_per_step(),
+            "depth_per_step": self.depth_per_step(self.batch_size),
+            "needs_rotation_keys": self.needs_rotation_keys,
         }
 
 

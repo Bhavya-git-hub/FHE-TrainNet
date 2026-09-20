@@ -199,9 +199,28 @@ def test_a_sane_learning_rate_stays_in_range(smoke_split) -> None:
 
 
 def test_depth_per_step_is_three_plus_activation_cost() -> None:
+    """A batched step pays for the cross-slot reduction."""
     for name in ("sigmoid_deg1", "sigmoid_deg3", "sigmoid_deg5"):
-        config = ModelConfig(n_features=2, activation=name)
-        assert config.depth_per_step() == 3 + ACTIVATIONS[name].depth_cost
+        config = ModelConfig(n_features=2, activation=name, batch_size=32)
+        assert config.depth_per_step(32) == 3 + ACTIVATIONS[name].depth_cost
+
+
+def test_a_single_slot_step_costs_one_level_less() -> None:
+    """With one sample there is nothing to reduce, so `mm` is skipped.
+
+    This is what removes the need for Galois keys, which measured 1901 MB against
+    105 MB for the same context - the difference between fitting a 1 GB host and
+    not.
+    """
+    for name in ("sigmoid_deg1", "sigmoid_deg3", "sigmoid_deg5"):
+        config = ModelConfig(n_features=2, activation=name, batch_size=1)
+        assert config.depth_per_step(1) == 2 + ACTIVATIONS[name].depth_cost
+        assert config.depth_per_step(1) == config.depth_per_step(32) - 1
+
+
+def test_rotation_keys_are_only_needed_for_a_real_batch() -> None:
+    assert ModelConfig(n_features=2, batch_size=1).needs_rotation_keys is False
+    assert ModelConfig(n_features=2, batch_size=16).needs_rotation_keys is True
 
 
 def test_weights_are_not_initialised_to_zero() -> None:

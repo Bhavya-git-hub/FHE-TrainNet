@@ -1,0 +1,40 @@
+name: demo_final
+dataset: iris_binary
+n_samples: 100
+test_fraction: 0.3
+feature_range: 3.0
+split_seed: 20260916
+activation: sigmoid_deg3
+learning_rate: 0.3
+batch_size: 32
+epochs: 6
+init_scale: 0.1
+model_seed: 20260916
+poly_modulus_degree: 16384
+coeff_mod_bit_sizes:
+- 45
+- 35
+- 35
+- 35
+- 35
+- 35
+- 35
+- 35
+- 35
+- 35
+- 35
+- 40
+scale_bits: 35
+baseline_interval: 1
+adaptive_safety_margin: 0
+adaptive_min_precision_bits: null
+modes:
+- plaintext
+- fhe_baseline
+- fhe_adaptive
+trials: 1
+measure_every: 1
+use_canary: true
+max_seconds_per_run: 900.0
+notes: Default demonstration configuration. Two training steps fit between refreshes,
+  so the fixed and adaptive policies make visibly different decisions.

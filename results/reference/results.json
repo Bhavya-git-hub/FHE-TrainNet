@@ -1,0 +1,764 @@
+{
+  "run_id": "reference",
+  "config": {
+    "name": "demo_final",
+    "dataset": "iris_binary",
+    "n_samples": 100,
+    "test_fraction": 0.3,
+    "feature_range": 3.0,
+    "split_seed": 20260916,
+    "activation": "sigmoid_deg3",
+    "learning_rate": 0.3,
+    "batch_size": 32,
+    "epochs": 6,
+    "init_scale": 0.1,
+    "model_seed": 20260916,
+    "poly_modulus_degree": 16384,
+    "coeff_mod_bit_sizes": [
+      45,
+      35,
+      35,
+      35,
+      35,
+      35,
+      35,
+      35,
+      35,
+      35,
+      35,
+      40
+    ],
+    "scale_bits": 35,
+    "baseline_interval": 1,
+    "adaptive_safety_margin": 0,
+    "adaptive_min_precision_bits": null,
+    "modes": [
+      "plaintext",
+      "fhe_baseline",
+      "fhe_adaptive"
+    ],
+    "trials": 1,
+    "measure_every": 1,
+    "use_canary": true,
+    "max_seconds_per_run": 900.0,
+    "notes": "Default demonstration configuration. Two training steps fit between refreshes, so the fixed and adaptive policies make visibly different decisions.",
+    "derived": {
+      "max_depth": 10,
+      "depth_per_step": 5,
+      "steps_between_refresh": 2,
+      "baseline_interval": 1,
+      "baseline_is_feasible": true
+    }
+  },
+  "config_fingerprint": "002a0cdd8dbd",
+  "dataset": {
+    "name": "iris_binary",
+    "n_samples": 100,
+    "n_features": 4,
+    "feature_names": [
+      "sepal_length",
+      "sepal_width",
+      "petal_length",
+      "petal_width"
+    ],
+    "class_balance": {
+      "0": 50,
+      "1": 50
+    },
+    "source": "C:\\Users\\bhavy\\Downloads\\FHE_TrainNet\\datasets\\iris_binary.csv",
+    "range_warnings": []
+  },
+  "split": {
+    "train_samples": 70,
+    "test_samples": 30,
+    "clipped_fraction": 0.0,
+    "feature_names": [
+      "sepal_length",
+      "sepal_width",
+      "petal_length",
+      "petal_width"
+    ]
+  },
+  "capacity_metric": {
+    "name": "Ciphertext Level / Remaining Computation Capacity",
+    "disclaimer": "Microsoft SEAL exposes no CKKS noise budget and TenSEAL binds no scale(), level() or noise_budget() accessor, so no literal ciphertext noise value is available and none is shown. Level is derived from the modulus chain; ciphertext size and precision are measured."
+  },
+  "reproducibility": {
+    "timestamp_utc": "2026-09-17T03:53:17+00:00",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+    "versions": {
+      "python": "3.14.3",
+      "numpy": "2.5.3",
+      "tenseal": "0.3.18",
+      "sklearn": "1.9.1",
+      "pandas": "3.0.5",
+      "plotly": "7.1.0",
+      "streamlit": "1.64.0",
+      "psutil": "7.2.2"
+    },
+    "refresh_kind": "client_aided"
+  },
+  "runs": [
+    {
+      "mode": "plaintext",
+      "trial": 0,
+      "status": "SUCCEEDED",
+      "reason": null,
+      "metrics": {
+        "train_seconds": 0.0012464000001273234,
+        "wall_seconds": 0.001356599999780883,
+        "setup_seconds": 0.0,
+        "steps": 12,
+        "final_train_accuracy": 0.9428571428571428,
+        "final_test_accuracy": 0.9,
+        "final_loss": 0.07928289759872138,
+        "activation_range_exceeded": true,
+        "diverged": false,
+        "max_abs_z": 3.5660587662960874,
+        "warnings": [],
+        "refreshes": null,
+        "refresh_seconds_total": null,
+        "refresh_seconds_mean": null,
+        "refresh_kind": null,
+        "encrypted_ops_total": null,
+        "min_levels_remaining": null,
+        "precision_bits_last": null,
+        "model": {
+          "weights": [
+            0.3931165722437922,
+            0.0845652575496386,
+            0.733581455298001,
+            0.7802774755822758
+          ],
+          "bias": -0.017421111253019504
+        }
+      },
+      "resources": {
+        "available": true,
+        "reason": null,
+        "samples": 1,
+        "peak_rss_mb": 43.39712,
+        "mean_rss_mb": 43.39712,
+        "baseline_rss_mb": 43.29472,
+        "peak_rss_above_baseline_mb": 0.10240000000000293,
+        "peak_cpu_percent": 0.0,
+        "mean_cpu_percent": 0.0
+      },
+      "epochs": [
+        {
+          "epoch": 0,
+          "train_loss": 0.16458292936988575,
+          "train_accuracy": 0.9142857142857143,
+          "test_accuracy": 0.8666666666666667,
+          "elapsed_seconds": 0.0004183999999440857,
+          "max_abs_z": 1.1121565764491053,
+          "activation_range_exceeded": false,
+          "fraction_outside_range": 0.0
+        },
+        {
+          "epoch": 1,
+          "train_loss": 0.1241779197277158,
+          "train_accuracy": 0.9285714285714286,
+          "test_accuracy": 0.9,
+          "elapsed_seconds": 0.00019480000037219725,
+          "max_abs_z": 1.918716558857529,
+          "activation_range_exceeded": false,
+          "fraction_outside_range": 0.0
+        },
+        {
+          "epoch": 2,
+          "train_loss": 0.10395298158923692,
+          "train_accuracy": 0.9428571428571428,
+          "test_accuracy": 0.9,
+          "elapsed_seconds": 0.0001602000002094428,
+          "max_abs_z": 2.5098898063206,
+          "activation_range_exceeded": false,
+          "fraction_outside_range": 0.0
+        },
+        {
+          "epoch": 3,
+          "train_loss": 0.0925132319857007,
+          "train_accuracy": 0.9428571428571428,
+          "test_accuracy": 0.9,
+          "elapsed_seconds": 0.00015399999983856105,
+          "max_abs_z": 2.9432666594761163,
+          "activation_range_exceeded": true,
+          "fraction_outside_range": 0.05714285714285714
+        },
+        {
+          "epoch": 4,
+          "train_loss": 0.0847237015193661,
+          "train_accuracy": 0.9428571428571428,
+          "test_accuracy": 0.9,
+          "elapsed_seconds": 0.000146500000028027,
+          "max_abs_z": 3.2856632562910697,
+          "activation_range_exceeded": true,
+          "fraction_outside_range": 0.08571428571428572
+        },
+        {
+          "epoch": 5,
+          "train_loss": 0.07928289759872138,
+          "train_accuracy": 0.9428571428571428,
+          "test_accuracy": 0.9,
+          "elapsed_seconds": 0.00014489999966826872,
+          "max_abs_z": 3.5660587662960874,
+          "activation_range_exceeded": true,
+          "fraction_outside_range": 0.12857142857142856
+        }
+      ]
+    },
+    {
+      "mode": "fhe_baseline",
+      "trial": 0,
+      "status": "SUCCEEDED",
+      "reason": null,
+      "metrics": {
+        "train_seconds": 59.33377199999995,
+        "wall_seconds": 61.5590629000003,
+        "setup_seconds": 16.609910000000127,
+        "keygen_seconds": 14.546779799999968,
+        "steps": 12,
+        "final_train_accuracy": 0.9428571428571428,
+        "final_test_accuracy": 0.9,
+        "final_loss": 0.07927959579293219,
+        "activation_range_exceeded": true,
+        "diverged": false,
+        "max_abs_z": 3.566259983156589,
+        "warnings": [],
+        "refreshes": 11,
+        "continues": 1,
+        "refresh_seconds_total": 5.523396799999773,
+        "refresh_seconds_mean": 0.5021269818181612,
+        "refresh_seconds_max": 0.7652113000003737,
+        "refresh_kind": "client_aided",
+        "refresh_kind_label": "CLIENT-AIDED REFRESH - not CKKS bootstrapping (Microsoft SEAL does not implement it)",
+        "is_actual_bootstrapping": false,
+        "encrypted_ops": {
+          "encrypt": 113,
+          "mul_ct_ct": 96,
+          "add": 48,
+          "polyval": 12,
+          "sub": 72,
+          "matmul_plain": 60,
+          "mul_plain": 12,
+          "refresh": 55
+        },
+        "encrypted_ops_total": 468,
+        "policy": {
+          "policy": "baseline_fixed",
+          "interval": 1,
+          "describe": "Fixed policy: refresh every 1 training step(s), without inspecting the ciphertext. Chosen in advance; not adaptive."
+        },
+        "capacity": {
+          "metric_name": "Ciphertext Level / Remaining Computation Capacity",
+          "disclaimer": "Microsoft SEAL exposes no CKKS noise budget and TenSEAL binds no scale(), level() or noise_budget() accessor, so no literal ciphertext noise value is available and none is shown. Level is derived from the modulus chain; ciphertext size and precision are measured.",
+          "readings": 12,
+          "max_depth": 10,
+          "min_levels_remaining": 5,
+          "final_levels_remaining": 5,
+          "precision_bits_first": 24.5455337376822,
+          "precision_bits_last": 12.477294477033825,
+          "precision_bits_min": 12.474120008771154,
+          "bytes_per_level": 174104.4,
+          "calibration_sizes": [
+            1961369,
+            1786901,
+            1611872,
+            1438719,
+            1264578,
+            1091087,
+            917055,
+            743097,
+            568820,
+            394905,
+            220325
+          ],
+          "consistency_failures": 0,
+          "inconsistency_detail": []
+        },
+        "min_levels_remaining": 5,
+        "precision_bits_first": 24.5455337376822,
+        "precision_bits_last": 12.477294477033825,
+        "depth_per_step": 5,
+        "max_depth": 10,
+        "model": {
+          "weights": [
+            0.39312636521278055,
+            0.08456317866896004,
+            0.7336294701789319,
+            0.7803341681429217
+          ],
+          "bias": -0.017425381300788575
+        }
+      },
+      "resources": {
+        "available": true,
+        "reason": null,
+        "samples": 136,
+        "peak_rss_mb": 1949.126656,
+        "mean_rss_mb": 872.5148611764706,
+        "baseline_rss_mb": 1926.549504,
+        "peak_rss_above_baseline_mb": 22.577151999999842,
+        "peak_cpu_percent": 824.9,
+        "mean_cpu_percent": 368.51029411764705
+      },
+      "epochs": [
+        {
+          "epoch": 0,
+          "steps": 2,
+          "train_loss": 0.16457471130952622,
+          "train_accuracy": 0.9142857142857143,
+          "test_accuracy": 0.8666666666666667,
+          "elapsed_seconds": 12.370759200000066,
+          "levels_remaining": 5,
+          "refreshes_so_far": 1,
+          "max_abs_z": 1.1122924722132468,
+          "activation_range_exceeded": false,
+          "fraction_outside_range": 0.0
+        },
+        {
+          "epoch": 1,
+          "steps": 2,
+          "train_loss": 0.12417087542725803,
+          "train_accuracy": 0.9285714285714286,
+          "test_accuracy": 0.9,
+          "elapsed_seconds": 9.89024389999986,
+          "levels_remaining": 5,
+          "refreshes_so_far": 3,
+          "max_abs_z": 1.9188937462244333,
+          "activation_range_exceeded": false,
+          "fraction_outside_range": 0.0
+        },
+        {
+          "epoch": 2,
+          "steps": 2,
+          "train_loss": 0.10394748627902116,
+          "train_accuracy": 0.9428571428571428,
+          "test_accuracy": 0.9,
+          "elapsed_seconds": 9.469875500000398,
+          "levels_remaining": 5,
+          "refreshes_so_far": 5,
+          "max_abs_z": 2.510067041015525,
+          "activation_range_exceeded": false,
+          "fraction_outside_range": 0.0
+        },
+        {
+          "epoch": 3,
+          "steps": 2,
+          "train_loss": 0.09250868182815708,
+          "train_accuracy": 0.9428571428571428,
+          "test_accuracy": 0.9,
+          "elapsed_seconds": 9.220851500000208,
+          "levels_remaining": 5,
+          "refreshes_so_far": 7,
+          "max_abs_z": 2.943439185854147,
+          "activation_range_exceeded": true,
+          "fraction_outside_range": 0.05714285714285714
+        },
+        {
+          "epoch": 4,
+          "steps": 2,
+          "train_loss": 0.08471983559250196,
+          "train_accuracy": 0.9428571428571428,
+          "test_accuracy": 0.9,
+          "elapsed_seconds": 9.455433899999662,
+          "levels_remaining": 5,
+          "refreshes_so_far": 9,
+          "max_abs_z": 3.285837285203233,
+          "activation_range_exceeded": true,
+          "fraction_outside_range": 0.08571428571428572
+        },
+        {
+          "epoch": 5,
+          "steps": 2,
+          "train_loss": 0.07927959579293219,
+          "train_accuracy": 0.9428571428571428,
+          "test_accuracy": 0.9,
+          "elapsed_seconds": 8.926117800000156,
+          "levels_remaining": 5,
+          "refreshes_so_far": 11,
+          "max_abs_z": 3.566259983156589,
+          "activation_range_exceeded": true,
+          "fraction_outside_range": 0.12857142857142856
+        }
+      ]
+    },
+    {
+      "mode": "fhe_adaptive",
+      "trial": 0,
+      "status": "SUCCEEDED",
+      "reason": null,
+      "metrics": {
+        "train_seconds": 34.285139399999935,
+        "wall_seconds": 34.94429769999988,
+        "setup_seconds": 0.6302702999996654,
+        "keygen_seconds": 5.299999884300632e-06,
+        "steps": 12,
+        "final_train_accuracy": 0.9428571428571428,
+        "final_test_accuracy": 0.9,
+        "final_loss": 0.0792792721798815,
+        "activation_range_exceeded": true,
+        "diverged": false,
+        "max_abs_z": 3.5662519515282267,
+        "warnings": [],
+        "refreshes": 5,
+        "continues": 7,
+        "refresh_seconds_total": 1.9164100000011786,
+        "refresh_seconds_mean": 0.3832820000002357,
+        "refresh_seconds_max": 0.3956618000001981,
+        "refresh_kind": "client_aided",
+        "refresh_kind_label": "CLIENT-AIDED REFRESH - not CKKS bootstrapping (Microsoft SEAL does not implement it)",
+        "is_actual_bootstrapping": false,
+        "encrypted_ops": {
+          "encrypt": 113,
+          "mul_ct_ct": 96,
+          "add": 48,
+          "polyval": 12,
+          "sub": 72,
+          "matmul_plain": 60,
+          "mul_plain": 12,
+          "refresh": 25
+        },
+        "encrypted_ops_total": 438,
+        "policy": {
+          "policy": "adaptive",
+          "safety_margin": 0,
+          "min_precision_bits": null,
+          "describe": "Adaptive policy: refresh only when the levels remaining cannot cover the next training step (plus a safety margin of 0). Uses only indicators the untrusted compute zone can observe without a key."
+        },
+        "capacity": {
+          "metric_name": "Ciphertext Level / Remaining Computation Capacity",
+          "disclaimer": "Microsoft SEAL exposes no CKKS noise budget and TenSEAL binds no scale(), level() or noise_budget() accessor, so no literal ciphertext noise value is available and none is shown. Level is derived from the modulus chain; ciphertext size and precision are measured.",
+          "readings": 12,
+          "max_depth": 10,
+          "min_levels_remaining": 0,
+          "final_levels_remaining": 5,
+          "precision_bits_first": 26.165181497239388,
+          "precision_bits_last": 12.474772304533529,
+          "precision_bits_min": 10.661489702838182,
+          "bytes_per_level": 174050.7,
+          "calibration_sizes": [
+            1960831,
+            1786684,
+            1612498,
+            1438968,
+            1265291,
+            1091633,
+            917222,
+            743009,
+            569499,
+            395776,
+            220324
+          ],
+          "consistency_failures": 0,
+          "inconsistency_detail": []
+        },
+        "min_levels_remaining": 0,
+        "precision_bits_first": 26.165181497239388,
+        "precision_bits_last": 12.474772304533529,
+        "depth_per_step": 5,
+        "max_depth": 10,
+        "model": {
+          "weights": [
+            0.3931202151080678,
+            0.08455794162967684,
+            0.7336306545490403,
+            0.7803382668068856
+          ],
+          "bias": -0.017429035164294015
+        }
+      },
+      "resources": {
+        "available": true,
+        "reason": null,
+        "samples": 89,
+        "peak_rss_mb": 900.370432,
+        "mean_rss_mb": 891.791383011236,
+        "baseline_rss_mb": 856.518656,
+        "peak_rss_above_baseline_mb": 43.851776000000086,
+        "peak_cpu_percent": 820.2,
+        "mean_cpu_percent": 404.7134831460674
+      },
+      "epochs": [
+        {
+          "epoch": 0,
+          "steps": 2,
+          "train_loss": 0.1645716705031727,
+          "train_accuracy": 0.9142857142857143,
+          "test_accuracy": 0.8666666666666667,
+          "elapsed_seconds": 5.336166499999763,
+          "levels_remaining": 0,
+          "refreshes_so_far": 0,
+          "max_abs_z": 1.1123469712603486,
+          "activation_range_exceeded": false,
+          "fraction_outside_range": 0.0
+        },
+        {
+          "epoch": 1,
+          "steps": 2,
+          "train_loss": 0.12416927120729514,
+          "train_accuracy": 0.9285714285714286,
+          "test_accuracy": 0.9,
+          "elapsed_seconds": 5.868007500000203,
+          "levels_remaining": 0,
+          "refreshes_so_far": 1,
+          "max_abs_z": 1.9189313607498868,
+          "activation_range_exceeded": false,
+          "fraction_outside_range": 0.0
+        },
+        {
+          "epoch": 2,
+          "steps": 2,
+          "train_loss": 0.10394661607577728,
+          "train_accuracy": 0.9428571428571428,
+          "test_accuracy": 0.9,
+          "elapsed_seconds": 6.007708099999945,
+          "levels_remaining": 0,
+          "refreshes_so_far": 2,
+          "max_abs_z": 2.5100845680587343,
+          "activation_range_exceeded": false,
+          "fraction_outside_range": 0.0
+        },
+        {
+          "epoch": 3,
+          "steps": 2,
+          "train_loss": 0.09250840373164393,
+          "train_accuracy": 0.9428571428571428,
+          "test_accuracy": 0.9,
+          "elapsed_seconds": 5.662977500000125,
+          "levels_remaining": 0,
+          "refreshes_so_far": 3,
+          "max_abs_z": 2.943430240571517,
+          "activation_range_exceeded": true,
+          "fraction_outside_range": 0.05714285714285714
+        },
+        {
+          "epoch": 4,
+          "steps": 2,
+          "train_loss": 0.08471949587251179,
+          "train_accuracy": 0.9428571428571428,
+          "test_accuracy": 0.9,
+          "elapsed_seconds": 5.677755100000013,
+          "levels_remaining": 0,
+          "refreshes_so_far": 4,
+          "max_abs_z": 3.2858242850827732,
+          "activation_range_exceeded": true,
+          "fraction_outside_range": 0.08571428571428572
+        },
+        {
+          "epoch": 5,
+          "steps": 2,
+          "train_loss": 0.0792792721798815,
+          "train_accuracy": 0.9428571428571428,
+          "test_accuracy": 0.9,
+          "elapsed_seconds": 5.73245339999994,
+          "levels_remaining": 0,
+          "refreshes_so_far": 5,
+          "max_abs_z": 3.5662519515282267,
+          "activation_range_exceeded": true,
+          "fraction_outside_range": 0.12857142857142856
+        }
+      ]
+    }
+  ],
+  "comparison": {
+    "by_mode": {
+      "plaintext": {
+        "trials": 1,
+        "succeeded": 1,
+        "statuses": [
+          "SUCCEEDED"
+        ],
+        "reasons": [],
+        "train_seconds": {
+          "mean": 0.0012464000001273234,
+          "min": 0.0012464000001273234,
+          "max": 0.0012464000001273234,
+          "n": 1
+        },
+        "test_accuracy": {
+          "mean": 0.9,
+          "min": 0.9,
+          "max": 0.9,
+          "n": 1
+        },
+        "final_loss": {
+          "mean": 0.07928289759872138,
+          "min": 0.07928289759872138,
+          "max": 0.07928289759872138,
+          "n": 1
+        },
+        "refreshes": {
+          "mean": null,
+          "min": null,
+          "max": null,
+          "n": 0
+        },
+        "refresh_seconds_total": {
+          "mean": null,
+          "min": null,
+          "max": null,
+          "n": 0
+        },
+        "encrypted_ops_total": {
+          "mean": null,
+          "min": null,
+          "max": null,
+          "n": 0
+        },
+        "peak_rss_mb": {
+          "mean": 43.39712,
+          "min": 43.39712,
+          "max": 43.39712,
+          "n": 1
+        },
+        "peak_rss_above_baseline_mb": {
+          "mean": 0.10240000000000293,
+          "min": 0.10240000000000293,
+          "max": 0.10240000000000293,
+          "n": 1
+        },
+        "mean_cpu_percent": {
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "n": 1
+        }
+      },
+      "fhe_baseline": {
+        "trials": 1,
+        "succeeded": 1,
+        "statuses": [
+          "SUCCEEDED"
+        ],
+        "reasons": [],
+        "train_seconds": {
+          "mean": 59.33377199999995,
+          "min": 59.33377199999995,
+          "max": 59.33377199999995,
+          "n": 1
+        },
+        "test_accuracy": {
+          "mean": 0.9,
+          "min": 0.9,
+          "max": 0.9,
+          "n": 1
+        },
+        "final_loss": {
+          "mean": 0.07927959579293219,
+          "min": 0.07927959579293219,
+          "max": 0.07927959579293219,
+          "n": 1
+        },
+        "refreshes": {
+          "mean": 11.0,
+          "min": 11,
+          "max": 11,
+          "n": 1
+        },
+        "refresh_seconds_total": {
+          "mean": 5.523396799999773,
+          "min": 5.523396799999773,
+          "max": 5.523396799999773,
+          "n": 1
+        },
+        "encrypted_ops_total": {
+          "mean": 468.0,
+          "min": 468,
+          "max": 468,
+          "n": 1
+        },
+        "peak_rss_mb": {
+          "mean": 1949.126656,
+          "min": 1949.126656,
+          "max": 1949.126656,
+          "n": 1
+        },
+        "peak_rss_above_baseline_mb": {
+          "mean": 22.577151999999842,
+          "min": 22.577151999999842,
+          "max": 22.577151999999842,
+          "n": 1
+        },
+        "mean_cpu_percent": {
+          "mean": 368.51029411764705,
+          "min": 368.51029411764705,
+          "max": 368.51029411764705,
+          "n": 1
+        }
+      },
+      "fhe_adaptive": {
+        "trials": 1,
+        "succeeded": 1,
+        "statuses": [
+          "SUCCEEDED"
+        ],
+        "reasons": [],
+        "train_seconds": {
+          "mean": 34.285139399999935,
+          "min": 34.285139399999935,
+          "max": 34.285139399999935,
+          "n": 1
+        },
+        "test_accuracy": {
+          "mean": 0.9,
+          "min": 0.9,
+          "max": 0.9,
+          "n": 1
+        },
+        "final_loss": {
+          "mean": 0.0792792721798815,
+          "min": 0.0792792721798815,
+          "max": 0.0792792721798815,
+          "n": 1
+        },
+        "refreshes": {
+          "mean": 5.0,
+          "min": 5,
+          "max": 5,
+          "n": 1
+        },
+        "refresh_seconds_total": {
+          "mean": 1.9164100000011786,
+          "min": 1.9164100000011786,
+          "max": 1.9164100000011786,
+          "n": 1
+        },
+        "encrypted_ops_total": {
+          "mean": 438.0,
+          "min": 438,
+          "max": 438,
+          "n": 1
+        },
+        "peak_rss_mb": {
+          "mean": 900.370432,
+          "min": 900.370432,
+          "max": 900.370432,
+          "n": 1
+        },
+        "peak_rss_above_baseline_mb": {
+          "mean": 43.851776000000086,
+          "min": 43.851776000000086,
+          "max": 43.851776000000086,
+          "n": 1
+        },
+        "mean_cpu_percent": {
+          "mean": 404.7134831460674,
+          "min": 404.7134831460674,
+          "max": 404.7134831460674,
+          "n": 1
+        }
+      }
+    },
+    "verdict": [
+      "Adaptive performed 5.0 refreshes on average against the fixed policy's 11.0 (55% fewer).",
+      "Training time 34.3s adaptive against 59.3s fixed - adaptive was 42% faster.",
+      "Test accuracy 0.900 adaptive against 0.900 fixed.",
+      "Encrypted training reached 0.900 test accuracy against the plaintext reference's 0.900 (difference +0.000)."
+    ]
+  },
+  "notes": {
+    "origin": "Recorded locally as run 20260917-092121-demo_final-141471 with configs/demo.yaml and committed so the dashboard has real measurements to show on first load. Every figure and table derived from it is from that run - nothing here is synthetic."
+  }
+}

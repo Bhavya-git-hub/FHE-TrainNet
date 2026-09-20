@@ -153,6 +153,9 @@ python -m pytest -q
 # Check the project against its own claims (section 25 checklist as a program)
 python scripts/validate.py
 
+# Low-memory profile (batch 1, no rotation keys) - what hosted deployments use
+python scripts/run_experiment.py --config configs/cloud.yaml
+
 # Optional: real CKKS bootstrapping via OpenFHE in Docker
 python scripts/openfhe_backend.py --probe
 ```
@@ -296,6 +299,7 @@ running. The backend reports itself unavailable and never falls back.
 ## Documentation
 
 - [`QUICKSTART.md`](QUICKSTART.md) — three commands to a running dashboard
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — hosting it, and the memory constraint that shapes how
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — design, trust boundary, packing decisions
 - [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) — **read before drawing conclusions**
 - [`docs/LIBRARY_CAPABILITIES.md`](docs/LIBRARY_CAPABILITIES.md) — generated capability evidence

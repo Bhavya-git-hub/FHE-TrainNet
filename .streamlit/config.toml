@@ -1,0 +1,12 @@
+[theme]
+base = "dark"
+primaryColor = "#0d7a76"
+
+[server]
+# Encrypted training is slow by nature. The default 200 MB upload cap is far more
+# than this app needs, and trimming it keeps the container's memory for CKKS.
+maxUploadSize = 5
+headless = true
+
+[browser]
+gatherUsageStats = false

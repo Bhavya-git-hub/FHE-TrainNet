@@ -185,7 +185,7 @@ def demo7(config: ExperimentConfig) -> dict[str, Any]:
     header(7, "How does adaptive behaviour compare with a baseline policy?")
     _, split = load(config)
     rows = []
-    per_step = config.model_config(1).depth_per_step()
+    per_step = config.model_config(1).depth_per_step(config.batch_size)
     depth = config.ckks_params().max_depth
     for interval in range(1, (depth // per_step) + 3):
         data = config.to_dict()

@@ -23,6 +23,15 @@ The resulting cost is `3 + activation_depth` levels per training step - five for
 the default degree-3 activation - which is what `ModelConfig.depth_per_step`
 reports and what the adaptive controller plans against.
 
+A batch of **one** is a special case worth stating, because it changes the
+hosting story. With a single occupied slot there is nothing to reduce across, so
+the `mm` is skipped and a step costs `2 + activation_depth`. More importantly
+`mm` is the only operation here that needs Galois rotation keys, and those keys
+measured 1901 MB against 105 MB for the same context without them. A single-slot
+configuration therefore runs the identical algorithm at a ring dimension that
+keeps precision honest, inside roughly a tenth of the memory - at the cost of
+processing one sample per step instead of a batch.
+
 The learning rate and batch size are folded into a second, pre-scaled encryption
 of the features (`Xs = X * lr/B`). The owner produces it once, at depth 0, which
 removes one plaintext multiplication - and therefore one modulus level - from
@@ -198,7 +207,7 @@ class EncryptedTrainer:
         activation = cfg.activation_fn
         first_epoch_max: float | None = None
         coeffs = list(activation.coefficients)
-        needed = cfg.depth_per_step()
+        needed: int | None = None  # set once `slots` is known, below
         result = EncryptedResult(refresh_kind=self.refresh_kind.value)
 
         setup_started = time.perf_counter()
@@ -223,7 +232,11 @@ class EncryptedTrainer:
         # An all-ones plaintext matrix: multiplying by it sums across the batch
         # slots and leaves the sum replicated in every slot. The 1/B averaging is
         # already folded into the pre-scaled features.
-        ones_matrix = np.ones((slots, slots)).tolist()
+        # With a single occupied slot the cross-slot reduction is the identity,
+        # so the matrix is not built and `mm` is never called - which is what
+        # removes the need for Galois keys entirely.
+        ones_matrix = None if slots == 1 else np.ones((slots, slots)).tolist()
+        needed = cfg.depth_per_step(slots)
         scale = cfg.learning_rate / slots
         result.setup_seconds = time.perf_counter() - setup_started
 
@@ -401,7 +414,7 @@ class EncryptedTrainer:
         xb: np.ndarray,
         yb: np.ndarray,
         coeffs: list[float],
-        ones_matrix: list[list[float]],
+        ones_matrix: list[list[float]] | None,
         scale: float,
         canary: CanaryProbe | None,
     ) -> tuple[list[EncVector], EncVector]:
@@ -437,21 +450,29 @@ class EncryptedTrainer:
         for j in range(f):
             prod = be.mul(delta, xs[j])
             self.ops.bump("mul_ct_ct")
-            grad = be.matmul_plain(prod, ones_matrix)
-            self.ops.bump("matmul_plain")
+            if ones_matrix is None:
+                # One sample: the "sum across the batch" is the product itself.
+                grad = prod
+            else:
+                grad = be.matmul_plain(prod, ones_matrix)
+                self.ops.bump("matmul_plain")
             new_w.append(be.sub(w[j], grad))
             self.ops.bump("sub")
 
-        grad_b = be.matmul_plain(be.mul_plain(delta, scale), ones_matrix)
+        scaled_delta = be.mul_plain(delta, scale)
         self.ops.bump("mul_plain")
-        self.ops.bump("matmul_plain")
+        if ones_matrix is None:
+            grad_b = scaled_delta
+        else:
+            grad_b = be.matmul_plain(scaled_delta, ones_matrix)
+            self.ops.bump("matmul_plain")
         new_b = be.sub(b, grad_b)
         self.ops.bump("sub")
 
         if canary is not None:
             # Mirror the step's depth onto the canary so its measured precision
             # reflects what the weights have actually been through.
-            for _ in range(self.config.depth_per_step()):
+            for _ in range(self.config.depth_per_step(len(yb))):
                 canary.apply_plain(1.0)
 
         return new_w, new_b

@@ -1,0 +1,4 @@
+mode,trial,status,train_seconds,test_accuracy,final_loss,refreshes,refresh_seconds_total,refresh_kind,encrypted_ops_total,min_levels_remaining,precision_bits_last,peak_rss_mb,mean_cpu_percent
+plaintext,0,SUCCEEDED,0.0012464000001273234,0.9,0.07928289759872138,,,,,,,43.39712,0.0
+fhe_baseline,0,SUCCEEDED,59.33377199999995,0.9,0.07927959579293219,11,5.523396799999773,client_aided,468,5,12.477294477033825,1949.126656,368.51029411764705
+fhe_adaptive,0,SUCCEEDED,34.285139399999935,0.9,0.0792792721798815,5,1.9164100000011786,client_aided,438,0,12.474772304533529,900.370432,404.7134831460674

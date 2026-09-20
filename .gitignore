@@ -12,6 +12,9 @@ secret_context*
 # Generated experiment output. Regenerate with scripts/run_experiment.py.
 results/*
 !results/.gitkeep
+# One real run is committed so a fresh deployment has measurements to display
+# instead of an empty dashboard. Everything else under results/ is regenerated.
+!results/reference/
 reports/*
 !reports/.gitkeep
 .pytest_cache/

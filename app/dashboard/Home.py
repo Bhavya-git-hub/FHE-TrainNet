@@ -16,6 +16,7 @@ import streamlit as st
 from app.dashboard.common import (
     ROOT,
     fmt,
+    profile_banner,
     metric_note,
     page_setup,
     refresh_banner,
@@ -51,6 +52,8 @@ schedule and an adaptive, capacity-aware controller, runs them against the same
 workload, and reports what was measured.
 """
 )
+
+profile_banner()
 
 st.markdown("### What restores that capacity here")
 refresh_banner(RefreshKind.CLIENT_AIDED)

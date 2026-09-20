@@ -132,7 +132,10 @@ def run_single(
     policy = policy_for(mode, config)
 
     setup_started = time.perf_counter()
-    owner = get_owner_zone(params)
+    # Galois keys are only needed for the cross-slot reduction, and they cost
+    # 1901 MB against 105 MB for the same context without them. A batch of one
+    # needs no reduction, so it does not pay for them.
+    owner = get_owner_zone(params, generate_galois=model_cfg.needs_rotation_keys)
     keygen_seconds = time.perf_counter() - setup_started
 
     monitor = CapacityMonitor(params)
@@ -190,7 +193,7 @@ def run_single(
         "min_levels_remaining": cap_summary["min_levels_remaining"],
         "precision_bits_first": cap_summary["precision_bits_first"],
         "precision_bits_last": cap_summary["precision_bits_last"],
-        "depth_per_step": model_cfg.depth_per_step(),
+        "depth_per_step": model_cfg.depth_per_step(config.batch_size),
         "max_depth": params.max_depth,
         "model": enc.model.to_dict() if enc and enc.model else None,
     }
