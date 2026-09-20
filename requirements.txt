@@ -1,0 +1,13 @@
+# FHE-TrainNet - pinned to the versions actually verified on this machine
+# Python 3.14.3 / Windows x64. See docs/LIBRARY_CAPABILITIES.md for the probe output.
+
+tenseal==0.3.18          # CKKS via Microsoft SEAL. The only cryptographic dependency.
+numpy==2.5.3
+scikit-learn==1.9.1      # dataset sources + metrics only; never used for encrypted maths
+pandas==3.0.5
+plotly==7.1.0            # dashboard charts
+matplotlib==3.11.2       # static figures written to results/ and reports/
+streamlit==1.64.0        # local demonstration dashboard
+psutil==7.2.2            # CPU / memory measurement
+PyYAML==6.0.3            # experiment configuration files
+pytest==9.1.1

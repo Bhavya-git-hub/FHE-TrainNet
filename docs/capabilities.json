@@ -1,0 +1,118 @@
+{
+  "backend": "tenseal",
+  "library": "TenSEAL (Microsoft SEAL)",
+  "library_version": "0.3.18",
+  "scheme": "CKKS",
+  "python_version": "3.14.3",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "probes": [
+    {
+      "name": "context_creation",
+      "result": "supported",
+      "detail": "",
+      "evidence": "{'poly_modulus_degree': 8192, 'coeff_mod_bit_sizes': [60, 40, 40, 60], 'scale_bits': 40, 'max_depth': 2, 'slots': 4096}"
+    },
+    {
+      "name": "encrypt",
+      "result": "supported",
+      "detail": "",
+      "evidence": "331668 bytes"
+    },
+    {
+      "name": "decrypt",
+      "result": "supported",
+      "detail": "",
+      "evidence": "[1.5, 2.5, 3.5]"
+    },
+    {
+      "name": "add_ct_ct",
+      "result": "supported",
+      "detail": "",
+      "evidence": "3.500000"
+    },
+    {
+      "name": "sub_ct_ct",
+      "result": "supported",
+      "detail": "",
+      "evidence": "-0.500000"
+    },
+    {
+      "name": "mul_ct_ct",
+      "result": "supported",
+      "detail": "",
+      "evidence": "3.000000"
+    },
+    {
+      "name": "mul_ct_plain",
+      "result": "supported",
+      "detail": "",
+      "evidence": "3.000000"
+    },
+    {
+      "name": "square",
+      "result": "supported",
+      "detail": "",
+      "evidence": "2.250000"
+    },
+    {
+      "name": "polyval_degree3",
+      "result": "supported",
+      "detail": "",
+      "evidence": "0.655552"
+    },
+    {
+      "name": "sum_slots",
+      "result": "supported",
+      "detail": "",
+      "evidence": "7.500001"
+    },
+    {
+      "name": "serialize",
+      "result": "supported",
+      "detail": "",
+      "evidence": "331668 bytes"
+    },
+    {
+      "name": "ciphertext_scale_accessor",
+      "result": "unsupported",
+      "detail": "AttributeError: '_tenseal_cpp.CKKSVector' object has no attribute 'scale'",
+      "evidence": ""
+    },
+    {
+      "name": "ciphertext_level_accessor",
+      "result": "unsupported",
+      "detail": "AttributeError: 'CKKSVector' object has no attribute 'level'",
+      "evidence": ""
+    },
+    {
+      "name": "noise_budget_accessor",
+      "result": "unsupported",
+      "detail": "AttributeError: 'CKKSVector' object has no attribute 'noise_budget'",
+      "evidence": ""
+    },
+    {
+      "name": "native_bootstrap",
+      "result": "unsupported",
+      "detail": "AttributeError: 'CKKSVector' object has no attribute 'bootstrap'",
+      "evidence": ""
+    },
+    {
+      "name": "compute_zone_decrypt_blocked",
+      "result": "supported",
+      "detail": "",
+      "evidence": "blocked: ValueError"
+    },
+    {
+      "name": "measured_multiplicative_depth",
+      "result": "supported",
+      "detail": "",
+      "evidence": "2 (params.max_depth predicts 2)"
+    }
+  ],
+  "refresh_mechanism": "client_aided",
+  "notes": [
+    "Microsoft SEAL does not implement CKKS bootstrapping, and TenSEAL exposes none. Capacity is restored by client-aided refresh (decrypt and re-encrypt in the data-owner zone), reported as RefreshKind.CLIENT_AIDED and never described as bootstrapping.",
+    "TenSEAL binds no scale(), level() or noise-budget accessor on CKKSVector, so no literal ciphertext noise value is available and none is displayed. Remaining capacity is tracked as modulus-chain level, corroborated by measured serialized ciphertext size, and accompanied by measured precision from a canary probe.",
+    "Ciphertexts cross from the owner zone to the compute zone by serialization, so the compute zone holds a public-only context and cannot decrypt its inputs."
+  ]
+}

@@ -1,0 +1,36 @@
+# The control that proves the capacity limit is real.
+#
+# This run is EXPECTED TO FAIL. With no refreshing, the weights exhaust the
+# modulus chain after two steps and the library refuses to continue. The failure
+# is recorded as a FAILED run with its reason, which is what makes the refresh
+# counts of the other policies meaningful rather than decorative.
+name: no_refresh_control
+dataset: iris_binary
+n_samples: 100
+test_fraction: 0.3
+feature_range: 3.0
+split_seed: 20260916
+
+activation: sigmoid_deg3
+learning_rate: 0.8
+batch_size: 32
+epochs: 6
+init_scale: 0.1
+model_seed: 20260916
+
+poly_modulus_degree: 16384
+coeff_mod_bit_sizes: [45, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 40]
+scale_bits: 35
+
+baseline_interval: 1
+adaptive_safety_margin: 0
+adaptive_min_precision_bits: null
+
+modes: [fhe_no_refresh, fhe_adaptive]
+trials: 1
+measure_every: 1
+use_canary: true
+max_seconds_per_run: 600.0
+notes: >-
+  Demonstrates that without refreshing the run fails on capacity exhaustion,
+  and that the adaptive policy completes the identical workload.

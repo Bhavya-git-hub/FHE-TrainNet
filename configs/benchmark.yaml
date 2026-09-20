@@ -1,0 +1,50 @@
+# Benchmark Mode - repeated trials for numbers worth reporting.
+#
+# Sized from measurement, not guesswork. The replicated-sum step (`mm` against a
+# plaintext all-ones matrix) is the dominant cost and grows with the batch: about
+# 0.6 s at batch 8, 0.9 s at 32, 1.4 s at 64. With eight features that is nine
+# such calls per training step, so batch 32 and four epochs keep three trials of
+# three modes inside roughly ten minutes.
+#
+# Three trials of each mode so the comparison carries a range rather than resting
+# on a single run (Technical Design section 7).
+#
+# learning_rate is 0.05 here against 0.3 in demo.yaml, and the difference is not
+# arbitrary. This dataset has eight features, so the pre-activation sum has twice
+# as many terms as the four-feature demo and |z| grows correspondingly faster. At
+# 0.3 it reached 8.47 - past the point where the degree-3 polynomial stops
+# behaving like a sigmoid - and the run reported divergence. At 0.05 the maximum
+# is 2.33, inside the trusted range, and test accuracy is 0.889.
+#
+# This is the lesson the project is about, applied to itself: a constant tuned for
+# one configuration is wrong for the next one.
+name: benchmark
+dataset: breast_cancer_top8
+n_samples: 120
+test_fraction: 0.3
+feature_range: 3.0
+split_seed: 20260916
+
+activation: sigmoid_deg3
+learning_rate: 0.05
+batch_size: 32
+epochs: 4
+init_scale: 0.1
+model_seed: 20260916
+
+poly_modulus_degree: 16384
+coeff_mod_bit_sizes: [45, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 40]
+scale_bits: 35
+
+baseline_interval: 1
+adaptive_safety_margin: 0
+adaptive_min_precision_bits: null
+
+modes: [plaintext, fhe_baseline, fhe_adaptive]
+trials: 3
+measure_every: 1
+use_canary: true
+max_seconds_per_run: 1800.0
+notes: >-
+  Repeated-trial benchmark on the larger bundled dataset. Reports mean, min and
+  max per mode.

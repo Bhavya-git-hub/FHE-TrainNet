@@ -1,0 +1,34 @@
+# The smallest configuration that still exercises every stage. Used by tests.
+#
+# The chain is short but the primes are not: an earlier version of this file used
+# 21-bit primes to squeeze in more depth, and a single multiplication came back as
+# 3.52 where 3.0 was exact - about 2.5 bits - without raising anything. CKKSParams
+# now refuses a scale that low. This configuration measures ~13 bits.
+name: fast_smoke
+dataset: two_moons
+n_samples: 40
+test_fraction: 0.3
+feature_range: 3.0
+split_seed: 7
+
+activation: sigmoid_deg1
+learning_rate: 0.8
+batch_size: 14
+epochs: 1
+init_scale: 0.1
+model_seed: 7
+
+poly_modulus_degree: 8192
+coeff_mod_bit_sizes: [45, 32, 32, 32, 32, 45]
+scale_bits: 32
+
+baseline_interval: 1
+adaptive_safety_margin: 0
+adaptive_min_precision_bits: null
+
+modes: [plaintext, fhe_adaptive]
+trials: 1
+measure_every: 1
+use_canary: true
+max_seconds_per_run: 300.0
+notes: Smallest end-to-end configuration; keeps the test suite quick.
