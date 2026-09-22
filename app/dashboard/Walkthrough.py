@@ -106,6 +106,198 @@ def walkthrough_config(samples: int) -> ExperimentConfig:
     return ExperimentConfig.from_dict(data)
 
 
+# Encrypting each value on its own costs a whole ciphertext each - about 2 MB at
+# these parameters - so the number is capped. It is a display convenience, not a
+# limit of the scheme: a single ciphertext holds thousands of slots.
+MAX_VALUES = 8
+
+
+def parse_values(text: str) -> tuple[list[float], str | None]:
+    """Read the numbers the user typed, or say exactly what was wrong with them."""
+    pieces = [p.strip() for p in text.replace("\n", ",").split(",") if p.strip()]
+    if not pieces:
+        return [], "Type at least one number."
+    values: list[float] = []
+    for piece in pieces:
+        try:
+            values.append(float(piece))
+        except ValueError:
+            return [], f"`{piece}` is not a number."
+    if len(values) > MAX_VALUES:
+        return [], f"At most {MAX_VALUES} values here, to keep the page quick."
+    return values, None
+
+
+# The CKKS parameters do not depend on the sample count, so the key zone this
+# section uses is the same one the training below will reuse from cache.
+base_config = walkthrough_config(16)
+params = base_config.ckks_params()
+
+st.divider()
+st.subheader("1. Encrypt your own numbers")
+st.markdown(
+    "Type any values you like. They are encrypted with the real CKKS scheme, the "
+    "ciphertext is shown, and the data owner decrypts them back."
+)
+
+typed = st.text_input(
+    "Values to encrypt (comma separated)",
+    value="3.5, -1.25, 0.75, 100.0",
+    help="Any real numbers. They are encrypted exactly as a training record would be.",
+)
+values, problem = parse_values(typed)
+if problem:
+    st.error(problem)
+
+if st.button("Encrypt these values", type="primary", disabled=bool(problem)):
+    owner = owner_for(base_config)
+    compute_zone = owner.backend()
+
+    # One ciphertext holding the whole vector - this is what training actually
+    # uses, because CKKS packs many values into the slots of a single ciphertext.
+    started = time.perf_counter()
+    packed = owner.encrypt(values, lineage="user_input")
+    packed_seconds = time.perf_counter() - started
+
+    started = time.perf_counter()
+    recovered = owner.decrypt(packed)[: len(values)]
+    unpack_seconds = time.perf_counter() - started
+
+    # And one ciphertext per value, purely so each number can be seen to produce
+    # its own ciphertext. Wasteful, and labelled as such on the page.
+    per_value = [owner.encrypt([v], lineage=f"single_{i}") for i, v in enumerate(values)]
+
+    # The same number encrypted twice. CKKS encryption is randomised, so these
+    # differ - which is the point, and it is worth showing rather than claiming.
+    again = owner.encrypt([values[0]], lineage="repeat")
+
+    # The boundary, demonstrated on the ciphertext the user just created.
+    try:
+        compute_zone.decrypt(packed)
+        refusal = None          # If this is ever reached it is a finding, not a pass.
+    except MissingKeyError as exc:
+        refusal = str(exc)
+
+    st.session_state["walkthrough_encryption"] = {
+        "fingerprint": owner.secret_key_fingerprint(),
+        "refusal": refusal,
+        "values": values,
+        "recovered": recovered,
+        "packed_seconds": packed_seconds,
+        "unpack_seconds": unpack_seconds,
+        "packed_bytes": compute_zone.serialized_size(packed),
+        "packed_head": packed.raw.serialize()[:48].hex(),
+        "per_value_heads": [ct.raw.serialize()[:32].hex() for ct in per_value],
+        "per_value_decrypted": [owner.decrypt(ct)[0] for ct in per_value],
+        "repeat_head": again.raw.serialize()[:32].hex(),
+    }
+
+enc = st.session_state.get("walkthrough_encryption")
+if enc is None:
+    st.info(
+        "Press **Encrypt these values**. The first press also generates the CKKS "
+        "key pair, which takes 20-35 s and is then reused for everything below."
+    )
+else:
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Encryption time", f"{enc['packed_seconds'] * 1000:.0f} ms")
+    k2.metric("Decryption time", f"{enc['unpack_seconds'] * 1000:.0f} ms")
+    k3.metric("Ciphertext size", f"{enc['packed_bytes'] / 1e6:.2f} MB")
+    k4.metric(
+        "Expansion",
+        f"{enc['packed_bytes'] / max(1, 8 * len(enc['values'])):.0f}x",
+        help=f"{8 * len(enc['values'])} bytes of numbers became "
+             f"{enc['packed_bytes']:,} bytes of ciphertext.",
+    )
+
+    st.markdown("**Your numbers, their ciphertexts, and what came back**")
+    # The decrypted value is the column a reader actually needs next to what they
+    # typed, so it comes first. The ciphertext goes last and is truncated hard:
+    # at 32 bytes it was wide enough to push the decryption off a laptop screen,
+    # which is the one comparison this table exists to make.
+    st.dataframe(
+        {
+            "You typed": [f"{v:.10g}" for v in enc["values"]],
+            "Decrypted by the key holder": [
+                f"{v:.10g}" for v in enc["per_value_decrypted"]
+            ],
+            "Absolute error": [
+                f"{abs(d - o):.2e}"
+                for d, o in zip(enc["per_value_decrypted"], enc["values"])
+            ],
+            "Precision (bits)": [
+                fmt(precision_bits(float(d), float(o)), ".1f", "exact")
+                for d, o in zip(enc["per_value_decrypted"], enc["values"])
+            ],
+            "Ciphertext (first 12 bytes)": [
+                head[:24] + "..." for head in enc["per_value_heads"]
+            ],
+        },
+        use_container_width=True,
+        hide_index=True,
+    )
+    st.caption(
+        "Each row was encrypted on its own so that one value maps to one ciphertext "
+        "you can look at. **Training does not work this way** - CKKS packs many values "
+        f"into the {params.slots:,} slots of a *single* ciphertext, which is why one "
+        "encrypted operation processes a whole vector at once."
+    )
+
+    # Anyone who types a small number alongside a large one will notice the bits
+    # column collapse, and the honest answer is a property of the scheme rather
+    # than a defect in this page. Better to say it than to be asked.
+    errors = [abs(d - o) for d, o in zip(enc["per_value_decrypted"], enc["values"])]
+    st.info(
+        f"**Why the precision column varies.** The absolute error is roughly the same "
+        f"for every value here - between {min(errors):.0e} and {max(errors):.0e} - "
+        "because CKKS fixes it by the scale, not by the size of the number. Precision "
+        "*in bits* is therefore a measure of the value's magnitude against that fixed "
+        "error, so a small input scores low while a large one scores high. Both are "
+        "wrong by about the same amount."
+    )
+
+    st.markdown("**The same number, encrypted twice**")
+    st.code(
+        f"{enc['values'][0]:.10g}  ->  {enc['per_value_heads'][0]}\n"
+        f"{enc['values'][0]:.10g}  ->  {enc['repeat_head']}",
+        language=None,
+    )
+    if enc["per_value_heads"][0] != enc["repeat_head"]:
+        st.caption(
+            "Different bytes, same value. CKKS encryption is randomised, so a "
+            "ciphertext cannot be matched back to a known plaintext by comparing it "
+            "with an encryption of that plaintext."
+        )
+    else:
+        st.error(
+            "**The two ciphertexts are identical.** Encryption is supposed to be "
+            "randomised, and if it is not, equal values are linkable. Treat this as "
+            "a finding rather than a coincidence."
+        )
+
+    st.markdown("**Who can read it**")
+    st.caption(f"Data-owner zone holds the secret key `{enc['fingerprint']}`.")
+    if enc["refusal"]:
+        st.success(
+            "The compute zone was asked to decrypt the ciphertext you just made, "
+            "and could not. This is the library refusing, quoted as raised:"
+        )
+        st.code(enc["refusal"], language=None)
+    else:
+        st.error(
+            "**The compute zone decrypted it.** That must not be possible and it "
+            "invalidates the trust boundary this project claims. Treat every other "
+            "result on this page as unverified until it is explained."
+        )
+
+    st.code(
+        f"first 48 bytes of the packed ciphertext holding all "
+        f"{len(enc['values'])} values:\n{enc['packed_head']}",
+        language=None,
+    )
+
+# --- The arithmetic, stated before the training runs confirm it or fail to. ----
+
 samples = st.select_slider(
     "Records to train on (one per step at batch size 1)",
     options=[12, 16, 20, 28],
@@ -113,12 +305,9 @@ samples = st.select_slider(
 )
 config = walkthrough_config(samples)
 budget = config.depth_budget()
-params = config.ckks_params()
-
-# --- Section C, stated first: the arithmetic the run will either confirm or not.
 
 st.divider()
-st.subheader("How it is done, before it is done")
+st.subheader("2. How the training is done, before it is done")
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Ring dimension", f"{params.poly_modulus_degree:,}")
@@ -138,15 +327,14 @@ policies disagree about, and everything below is measured against it.
 
 st.divider()
 
-if st.button("Run the full sequence", type="primary"):
+if st.button("Run the training", type="primary"):
     results: dict[str, object] = {}
     progress_bar = st.progress(0.0)
     stage = st.empty()
 
-    # ---- A. Keys, and proof that the compute zone cannot read anything -------
-    stage.info("1 of 4: generating the CKKS key pair")
-    owner = owner_for(config)
-    compute_zone = owner.backend()
+    # Reuses the key zone the encryption section generated, when there is one.
+    stage.info("1 of 3: preparing the data and the CKKS key pair")
+    owner_for(config)
 
     dataset = load_dataset(config.dataset)
     split = prepare(
@@ -157,40 +345,13 @@ if st.button("Run the full sequence", type="primary"):
         feature_range=config.feature_range,
     )
 
-    probe_record = split.x_train[0]
-    started = time.perf_counter()
-    probe_ct = owner.encrypt(probe_record.tolist(), lineage="walkthrough")
-    encrypt_seconds = time.perf_counter() - started
+    progress_bar.progress(0.1)
 
-    # The boundary is demonstrated rather than described: the attempt is real.
-    try:
-        compute_zone.decrypt(probe_ct)
-        refusal = None          # If this is ever reached it is a finding, not a pass.
-    except MissingKeyError as exc:
-        refusal = str(exc)
-
-    started = time.perf_counter()
-    recovered = owner.decrypt(probe_ct)
-    decrypt_seconds = time.perf_counter() - started
-
-    results["keys"] = {
-        "fingerprint": owner.secret_key_fingerprint(),
-        "refusal": refusal,
-        "record": probe_record,
-        "recovered": recovered[: len(probe_record)],
-        "encrypt_seconds": encrypt_seconds,
-        "decrypt_seconds": decrypt_seconds,
-        "size_bytes": compute_zone.serialized_size(probe_ct),
-        "head": probe_ct.raw.serialize()[:48].hex(),
-        "feature_names": list(split.feature_names),
-    }
-    progress_bar.progress(0.15)
-
-    # ---- D. Both policies, on one split, from one set of initial weights -----
+    # ---- Both policies, on one split, from one set of initial weights --------
     runs: dict[str, object] = {}
     logs: dict[str, list[str]] = {}
     for index, (mode, title, _) in enumerate(POLICIES):
-        stage.info(f"{index + 2} of 4: training under the {title.lower()}")
+        stage.info(f"{index + 2} of 3: training under the {title.lower()}")
         lines: list[str] = []
         box = st.empty()
 
@@ -206,9 +367,9 @@ if st.button("Run the full sequence", type="primary"):
         runs[mode] = run_single(config, mode, split, progress=record_step)
         logs[mode] = lines
         box.empty()
-        progress_bar.progress(0.15 + 0.35 * (index + 1))
+        progress_bar.progress(0.1 + 0.4 * (index + 1))
 
-    stage.info("4 of 4: the plaintext reference, for comparison only")
+    stage.info("3 of 3: the plaintext reference, for comparison only")
     runs[Mode.PLAINTEXT] = run_single(config, Mode.PLAINTEXT, split)
 
     results["runs"] = runs
@@ -221,90 +382,15 @@ if st.button("Run the full sequence", type="primary"):
 state = st.session_state.get("walkthrough")
 if state is None:
     st.info(
-        "Press **Run the full sequence**. Everything on this page is computed when "
-        "you press it - none of it is stored or pre-recorded."
+        "Press **Run the training**. Everything below is computed when you press it - "
+        "none of it is stored or pre-recorded."
     )
     st.stop()
 
-keys = state["keys"]
 runs = state["runs"]
 split = state["split"]
 
 # --- A. -----------------------------------------------------------------------
-
-st.divider()
-st.subheader("1. The keys, and who can use them")
-
-k1, k2 = st.columns(2)
-with k1:
-    st.markdown(
-        f"""
-**Data-owner zone** — holds the secret key
-`{keys['fingerprint']}`
-
-Can encrypt, and can decrypt. The fingerprint is a truncated hash shown so two
-key sets can be told apart; the key itself is never displayed, logged, or written
-to disk.
-"""
-    )
-with k2:
-    st.markdown(
-        """
-**Compute zone** — holds a public-only context
-
-Can compute on ciphertexts. Cannot read them. This is not a policy the code
-enforces on itself; the secret key is absent from the context, so the operation
-is impossible.
-"""
-    )
-
-if keys["refusal"]:
-    st.success(
-        "**The compute zone was asked to decrypt, and could not.** This is the "
-        "library refusing, quoted exactly as it was raised:"
-    )
-    st.code(keys["refusal"], language=None)
-else:
-    st.error(
-        "**The compute zone decrypted a ciphertext.** That must not be possible and "
-        "it invalidates the trust boundary this project claims. Treat every other "
-        "result on this page as unverified until it is explained."
-    )
-
-# --- B. -----------------------------------------------------------------------
-
-st.divider()
-st.subheader("2. Encryption")
-
-e1, e2, e3, e4 = st.columns(4)
-e1.metric("Encryption time", f"{keys['encrypt_seconds'] * 1000:.0f} ms")
-e2.metric("Decryption time", f"{keys['decrypt_seconds'] * 1000:.0f} ms")
-e3.metric("Ciphertext size", f"{keys['size_bytes'] / 1e6:.2f} MB")
-e4.metric(
-    "Expansion",
-    f"{keys['size_bytes'] / max(1, keys['record'].nbytes):.0f}x",
-    help=f"{keys['record'].nbytes} bytes of features became {keys['size_bytes']} bytes.",
-)
-
-st.dataframe(
-    {
-        "Feature": keys["feature_names"],
-        "Original value": [f"{v:.8f}" for v in keys["record"]],
-        "What the training engine sees": ["<ciphertext>"] * len(keys["record"]),
-        "Decrypted by the owner": [f"{v:.8f}" for v in keys["recovered"]],
-        "Precision (bits, measured)": [
-            fmt(precision_bits(float(d), float(o)), ".1f", "exact")
-            for d, o in zip(keys["recovered"], keys["record"])
-        ],
-    },
-    use_container_width=True,
-    hide_index=True,
-)
-st.code(f"first 48 bytes of the serialized ciphertext:\n{keys['head']}", language=None)
-st.caption(
-    "CKKS is approximate. What returns is not bit-identical to what went in, and the "
-    "difference is measured here rather than described."
-)
 
 # --- C (measured) and D -------------------------------------------------------
 
