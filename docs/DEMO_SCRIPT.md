@@ -17,6 +17,42 @@ context is cached for the session.
 
 ---
 
+## The Moving Target - the answer to the one hard question
+
+**Page: Moving Target. Roughly one minute to run, at the default of 16 samples.**
+
+Sooner or later somebody asks the obvious thing:
+
+> *If exactly one interval is optimal, why not tune it once and keep it?*
+
+Every other page answers half of that. This one answers it, because the
+configuration moves.
+
+**Act 1.** On a degree-1 activation a training step costs 3 levels and the chain
+provides 10, so intervals 1, 2 and 3 fit and 4 does not. Tune it: interval 3 is
+the largest that works, so it refreshes least. Interval 4 fails outright, and the
+page shows the real `CapacityExhaustedError` rather than describing one.
+
+**Act 2.** Change one field - the activation, from degree 1 to degree 3. This is
+an ordinary modelling improvement: a better approximation of the sigmoid. Nobody
+touched the refresh policy. But a step now costs 4 levels, `3 x 4 = 12 > 10`, and
+**the tuned interval fails.**
+
+The adaptive controller was given no interval at all and succeeded both times.
+
+**The line to say out loud**, from a measured run at 16 samples:
+
+> The hand-tuned optimum was 3 refreshes. The adaptive controller, told nothing,
+> also used 3. Then the model changed, the tuned value broke, and adaptive moved
+> to 5 on its own.
+
+**What not to overclaim.** Adaptive does not beat a correctly tuned constant -
+Act 1 shows them doing identical work. The claim is that the correct constant is
+a function of a configuration that changes, and a constant does not track it.
+The page says this itself, at the bottom, so you do not have to remember to.
+
+---
+
 ## 0. The question (30 seconds, no slides)
 
 > A hospital wants a model trained on patient records. The cloud provider that
