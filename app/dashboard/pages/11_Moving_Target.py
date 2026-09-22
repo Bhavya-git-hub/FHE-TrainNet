@@ -34,7 +34,7 @@ if str(ROOT) not in sys.path:
 
 import streamlit as st
 
-from app.dashboard.common import metric_note, page_setup, refresh_banner
+from app.dashboard.common import page_setup, refresh_banner
 from src.crypto.backend import RefreshKind
 from src.data.loader import load_dataset, prepare
 from src.experiments.config import ExperimentConfig, Mode
@@ -99,12 +99,14 @@ st.markdown(
     "is wrong and that is the finding."
 )
 
-preview_samples = 24
-depth = base_config(preview_samples).ckks_params().max_depth
+# The depth budget is a function of the activation, the batch width and the
+# modulus chain. The sample count does not enter it, so any value serves here.
+SIZING_IRRELEVANT_TO_DEPTH = 16
+depth = base_config(SIZING_IRRELEVANT_TO_DEPTH).ckks_params().max_depth
 rows = {"Model": [], "Cost per training step": [], "Fixed intervals that fit": []}
 feasible: dict[str, list[int]] = {}
 for name in (BEFORE, AFTER):
-    per_step = budget_for(preview_samples, name)["depth_per_step"]
+    per_step = budget_for(SIZING_IRRELEVANT_TO_DEPTH, name)["depth_per_step"]
     fits = [n for n in range(1, 6) if n * per_step <= depth]
     feasible[name] = fits
     act = ACTIVATIONS[name]
@@ -321,5 +323,3 @@ st.info(
     "The claim is narrower and harder to dismiss: the correct value is a function "
     "of a configuration that changes, and a constant does not track it."
 )
-
-metric_note()

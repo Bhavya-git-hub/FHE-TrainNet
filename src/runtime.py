@@ -21,9 +21,18 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Below this, use the low-memory profile. The batched profile needs ~1.9 GB for
-# its rotation keys alone, so anything under roughly 1.5 GB cannot run it.
-LOW_MEMORY_THRESHOLD_MB = 1500
+# Below this, use the low-memory profile.
+#
+# The number is the batched profile's *measured peak resident size*, not its key
+# size, plus room to be wrong. A demo run recorded 2196 MB peak RSS - the 1901 MB
+# of Galois rotation keys is most of it, but not all of it, and an earlier
+# version of this file used the key figure alone and set the bar at 1500 MB. That
+# let a container reporting 2 GB select a profile that needs 2.2 GB, which is a
+# kill part-way through a demonstration rather than an error anyone can read.
+LOW_MEMORY_THRESHOLD_MB = 3000
+
+# Measured peak RSS of the batched profile, for the message in `profile_note`.
+BATCHED_PROFILE_PEAK_MB = 2196
 
 # cgroup v2 then v1. A container's real limit lives here; /proc/meminfo and
 # psutil both report the host.
@@ -73,6 +82,27 @@ def available_memory_mb() -> float | None:
         return None
 
 
+# Streamlit Community Cloud checks the repository out under `/mount/src`; the
+# traceback from a failed deployment shows it. Containers generally advertise
+# themselves through `/.dockerenv` or their own cgroup names.
+_CONTAINER_MARKERS = ("docker", "kubepods", "containerd", "lxc")
+
+
+def looks_hosted() -> bool:
+    """Whether this process is running somewhere its memory is not its own.
+
+    Used only to decide what to do when the container's limit cannot be read.
+    A false positive costs throughput; a false negative costs the process.
+    """
+    if Path("/mount/src").is_dir() or Path("/.dockerenv").exists():
+        return True
+    try:
+        cgroup = Path("/proc/self/cgroup").read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return any(marker in cgroup for marker in _CONTAINER_MARKERS)
+
+
 def default_config_name() -> str:
     """Which shipped configuration to open the dashboard with.
 
@@ -82,6 +112,18 @@ def default_config_name() -> str:
     override = os.environ.get("FHE_TRAINNET_CONFIG", "").strip()
     if override:
         return override
+
+    limit = cgroup_memory_limit_mb()
+    if limit is not None:
+        return "cloud" if limit < LOW_MEMORY_THRESHOLD_MB else "demo"
+
+    # No container limit to read. On a hosted tier that is not evidence of a
+    # generous allowance - it is the absence of evidence, and `psutil` will
+    # happily answer with the host's memory, which is not ours to use. Guessing
+    # high kills the process; guessing low costs throughput and says so on
+    # screen. The asymmetry decides it.
+    if looks_hosted():
+        return "cloud"
 
     memory = available_memory_mb()
     if memory is not None and memory < LOW_MEMORY_THRESHOLD_MB:
@@ -101,12 +143,19 @@ def profile_note() -> str | None:
     """
     if default_config_name() != "cloud":
         return None
-    memory = available_memory_mb()
-    seen = f"{memory:.0f} MB" if memory is not None else "an unknown amount"
+    limit = cgroup_memory_limit_mb()
+    if limit is not None:
+        seen = f"a {limit:.0f} MB container limit"
+    elif looks_hosted():
+        seen = "no container memory limit it is allowed to read"
+    else:
+        memory = available_memory_mb()
+        seen = f"{memory:.0f} MB" if memory is not None else "an unknown amount"
     return (
-        f"Running the **low-memory profile**: this process can see {seen} of memory, "
-        f"below the {LOW_MEMORY_THRESHOLD_MB} MB the batched profile needs for its "
-        "Galois rotation keys (measured at 1901 MB). The single-slot profile runs the "
+        f"Running the **low-memory profile**: this process sees {seen}, "
+        f"against the {LOW_MEMORY_THRESHOLD_MB} MB needed for the batched profile "
+        f"(measured peak {BATCHED_PROFILE_PEAK_MB} MB, mostly Galois rotation keys "
+        "at 1901 MB). The single-slot profile runs the "
         "same algorithm at the same ring dimension and scale for about 105 MB, "
         "processing one sample per step instead of a batch. Everything shown is real; "
         "only the throughput is smaller."

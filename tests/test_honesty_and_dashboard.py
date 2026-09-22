@@ -579,3 +579,70 @@ def test_home_imports_with_only_the_script_dir_on_sys_path() -> None:
         capture_output=True, text=True, errors="replace", cwd=ROOT,
     )
     assert "RESOLVED" in result.stdout, result.stdout + result.stderr[-500:]
+
+
+# --- profile selection must never choose a profile the host cannot run --------
+
+
+@pytest.mark.parametrize(
+    ("cgroup_mb", "hosted", "psutil_mb", "expected"),
+    [
+        # A hosted tier that publishes no readable limit. This is the case that
+        # killed the deployed app: the old code fell through to psutil, was told
+        # the *host's* memory, and picked the batched profile.
+        (None, True, 16000.0, "cloud"),
+        # A container that does publish a limit, but one below the batched
+        # profile's measured 2196 MB peak. The old threshold of 1500 MB called
+        # this enough.
+        (2700.0, True, 16000.0, "cloud"),
+        # Genuinely roomy container: the batched profile fits.
+        (8000.0, True, 16000.0, "demo"),
+        # An ordinary laptop. No cgroup, not hosted, psutil is telling the truth.
+        (None, False, 16000.0, "demo"),
+        # A small machine, honestly reported.
+        (None, False, 900.0, "cloud"),
+    ],
+)
+def test_the_profile_is_never_one_the_host_cannot_run(
+    monkeypatch: pytest.MonkeyPatch,
+    cgroup_mb: float | None,
+    hosted: bool,
+    psutil_mb: float,
+    expected: str,
+) -> None:
+    """Guessing high kills the process; guessing low only costs throughput.
+
+    The batched profile was measured at 2196 MB peak RSS. Anything that selects
+    it with less than that available is not a degraded demonstration, it is a
+    container kill part-way through one - which reads as a broken project rather
+    than an exhausted host, and is exactly what the deployed app did.
+    """
+    from src import runtime
+
+    monkeypatch.delenv("FHE_TRAINNET_CONFIG", raising=False)
+    monkeypatch.setattr(runtime, "cgroup_memory_limit_mb", lambda: cgroup_mb)
+    monkeypatch.setattr(runtime, "looks_hosted", lambda: hosted)
+    monkeypatch.setattr(runtime, "available_memory_mb", lambda: cgroup_mb or psutil_mb)
+
+    assert runtime.default_config_name() == expected
+
+
+def test_the_threshold_clears_the_measured_peak() -> None:
+    """The bar has to be above what the profile actually needs, not below it.
+
+    It was set from the rotation-key figure (1901 MB) and rounded down to 1500,
+    while the profile's real peak is 2196 MB. A limit between those two numbers
+    selected a profile that could not run.
+    """
+    from src import runtime
+
+    assert runtime.LOW_MEMORY_THRESHOLD_MB > runtime.BATCHED_PROFILE_PEAK_MB
+
+
+def test_an_explicit_override_still_wins(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A deployment that knows better than the detection must be able to say so."""
+    from src import runtime
+
+    monkeypatch.setenv("FHE_TRAINNET_CONFIG", "benchmark")
+    monkeypatch.setattr(runtime, "looks_hosted", lambda: True)
+    assert runtime.default_config_name() == "benchmark"

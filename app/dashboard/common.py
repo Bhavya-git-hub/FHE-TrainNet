@@ -24,7 +24,13 @@ from src.data.loader import available_datasets  # noqa: E402
 from src.experiments.config import ExperimentConfig, Mode  # noqa: E402
 from src.model.activation import ACTIVATIONS  # noqa: E402
 from src.noise.monitor import METRIC_DISCLAIMER, METRIC_NAME  # noqa: E402
-from src.runtime import default_config_path, profile_note  # noqa: E402
+from src.runtime import (  # noqa: E402
+    BATCHED_PROFILE_PEAK_MB,
+    LOW_MEMORY_THRESHOLD_MB,
+    default_config_name,
+    default_config_path,
+    profile_note,
+)
 
 PAGE_ICON = "🔐"
 
@@ -146,6 +152,19 @@ def sidebar_controls() -> ExperimentConfig:
         if data["batch_size"] == 1:
             st.caption(
                 "Batch 1: no rotation keys, ~105 MB context, one level cheaper per step."
+            )
+        elif default_config_name() == "cloud":
+            # The profile was reduced because this host cannot afford rotation
+            # keys. Moving this slider asks for them anyway, and the process is
+            # killed at key generation rather than failing with a message - so
+            # the warning has to arrive before the run, not after it.
+            st.warning(
+                f"**This host cannot run batch {data['batch_size']}.** The low-memory "
+                f"profile was selected because the batched profile needs "
+                f"{LOW_MEMORY_THRESHOLD_MB} MB (measured peak "
+                f"{BATCHED_PROFILE_PEAK_MB} MB, mostly Galois rotation keys). "
+                "Generating those keys here will have the process killed outright - "
+                "no error message, just a restart. Set it back to 1."
             )
         data["epochs"] = st.slider("Epochs", 1, 20, config.epochs)
 
