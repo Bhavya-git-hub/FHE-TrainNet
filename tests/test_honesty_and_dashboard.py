@@ -555,6 +555,7 @@ def test_home_imports_with_only_the_script_dir_on_sys_path() -> None:
     The static test above checks ordering; this one reproduces Streamlit Cloud's
     actual import environment and runs the real file.
     """
+    import os
     import subprocess
     import sys
     import textwrap
@@ -574,10 +575,28 @@ def test_home_imports_with_only_the_script_dir_on_sys_path() -> None:
         print("RESOLVED")
         """
     )
+    # OpenBLAS reserves per-thread scratch buffers on import, and this subprocess
+    # is spawned at the end of a suite that has had several CKKS contexts open.
+    # On a small machine it could not allocate them and died before reaching the
+    # import under test - a failure of the host, reported as a failure of the
+    # code. One thread is all a probe that imports and exits ever needed.
+    environment = dict(os.environ)
+    environment.update(
+        OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", MKL_NUM_THREADS="1"
+    )
     result = subprocess.run(
         [sys.executable, "-c", probe],
-        capture_output=True, text=True, errors="replace", cwd=ROOT,
+        capture_output=True, text=True, errors="replace", cwd=ROOT, env=environment,
     )
+    combined = result.stdout + result.stderr
+    if "RESOLVED" not in result.stdout and "Memory allocation" in combined:
+        # Say what went unverified rather than report a red test that is not
+        # about this code at all.
+        pytest.skip(
+            "the machine could not spare the memory to start a probe subprocess, "
+            "so the Home.py import path was NOT verified in this run "
+            f"({result.stderr.strip()[:120]})"
+        )
     assert "RESOLVED" in result.stdout, result.stdout + result.stderr[-500:]
 
 
@@ -697,3 +716,85 @@ def test_an_explicit_override_still_wins(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv("FHE_TRAINNET_CONFIG", "benchmark")
     monkeypatch.setattr(runtime, "looks_hosted", lambda: True)
     assert runtime.default_config_name() == "benchmark"
+
+
+# --- rotation keys are never generated when they are not needed ---------------
+
+
+def test_every_caller_asks_for_rotation_keys_explicitly() -> None:
+    """`get_owner_zone`'s `generate_galois` defaults to True, so omitting it costs
+    1901 MB against 105 MB - silently, and only at run time.
+
+    The trainer always passed it. The dashboard's `owner_for` did not, so the
+    low-memory profile was correct everywhere it was tested from the command line
+    and wrong in the one place the hosted deployment actually runs. Selecting a
+    batch of one to avoid those keys and then building them anyway on the first
+    encrypted page is not a degraded demonstration - it is a container kill with
+    no error a viewer can read.
+
+    This is asserted over call sites rather than over `owner_for` alone, because
+    the next page to need a key zone will reach for the same default.
+    """
+    root = Path(__file__).resolve().parents[1]
+    offenders: list[str] = []
+    for path in list((root / "app").rglob("*.py")) + list((root / "src").rglob("*.py")):
+        if path.name == "tenseal_backend.py":       # where it is defined
+            continue
+        text = path.read_text(encoding="utf-8")
+        for number, line in enumerate(text.splitlines(), start=1):
+            if "get_owner_zone(" not in line or "import" in line:
+                continue
+            window = chr(10).join(text.splitlines()[number - 1:number + 3])
+            if "generate_galois" not in window:
+                offenders.append(f"{path.relative_to(root).as_posix()}:{number}")
+    assert not offenders, (
+        "these call get_owner_zone without saying whether rotation keys are "
+        f"wanted, so they get them: {offenders}"
+    )
+
+
+def test_owner_for_asks_for_the_keys_the_batch_size_actually_needs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Batch 1 skips the cross-slot reduction, so it needs no rotation keys.
+
+    Also checks the cache key: two zones for one parameter set differ by exactly
+    this flag, and a key that cannot tell them apart hands back a context missing
+    the keys the caller needs, or holding the ones it was trying not to pay for.
+    """
+    import contextlib
+
+    from app.dashboard import common
+
+    requested: list[bool] = []
+
+    class _FakeStreamlit:
+        session_state: dict[str, object] = {}
+
+        @staticmethod
+        @contextlib.contextmanager
+        def spinner(_message: str):
+            yield
+
+    def _fake_zone(_params, *, generate_galois: bool = True):
+        requested.append(generate_galois)
+        return f"zone(galois={generate_galois})"
+
+    fake = _FakeStreamlit()
+    fake.session_state = {}
+    monkeypatch.setattr(common, "st", fake)
+    monkeypatch.setattr(common, "get_owner_zone", _fake_zone)
+
+    base = ExperimentConfig.load(ROOT / "configs" / "cloud.yaml").to_dict()
+    base.pop("derived", None)
+
+    base["batch_size"] = 1
+    common.owner_for(ExperimentConfig.from_dict(dict(base)))
+    assert requested == [False], "batch 1 must not generate Galois rotation keys"
+
+    base["batch_size"] = 32
+    common.owner_for(ExperimentConfig.from_dict(dict(base)))
+    assert requested == [False, True], "batch 32 needs them for the reduction"
+
+    # Same parameters, different flag: two cached entries, not one reused.
+    assert len(fake.session_state["_owner_cache"]) == 2

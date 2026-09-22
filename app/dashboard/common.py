@@ -237,14 +237,43 @@ def sidebar_controls() -> ExperimentConfig:
 
 
 def owner_for(config: ExperimentConfig, *, spinner: str = "Generating CKKS keys...") -> Any:
-    """Get (and cache for this session) the data-owner zone for these parameters."""
+    """Get (and cache for this session) the data-owner zone for these parameters.
+
+    `generate_galois` is passed explicitly, and that is the whole point of this
+    function. It defaults to True in `get_owner_zone`, so calling it without the
+    argument generated Galois rotation keys unconditionally - measured at 1901 MB
+    against 105 MB without them.
+
+    The trainer had always got this right (`run_single` passes
+    `model_cfg.needs_rotation_keys`), so the low-memory profile looked correct
+    everywhere it was tested from the command line. The dashboard did not, and
+    the dashboard is what the hosted deployment runs: selecting a batch of one
+    specifically to avoid those keys, then building them anyway on the first
+    encrypted page, put the process 1.6 GB deep on a tier that allows about one,
+    and it was killed with no error a viewer could read.
+
+    The flag is part of the cache key as well. Two zones for one parameter set
+    differ by exactly this, and a key that cannot tell them apart hands back a
+    context missing the keys the caller needs - or holding the ones it was trying
+    not to pay for.
+    """
     params = config.ckks_params()
-    key = (params.poly_modulus_degree, params.coeff_mod_bit_sizes, params.scale_bits)
+    needs_galois = bool(config.depth_budget()["needs_rotation_keys"])
+    key = (
+        params.poly_modulus_degree,
+        params.coeff_mod_bit_sizes,
+        params.scale_bits,
+        needs_galois,
+    )
     cache = st.session_state.setdefault("_owner_cache", {})
     if key not in cache:
-        with st.spinner(f"{spinner} (20-35 s at n={params.poly_modulus_degree}; done once "
-                        "per parameter set, and never written to disk)"):
-            cache[key] = get_owner_zone(params)
+        detail = (
+            "with rotation keys, ~1.9 GB" if needs_galois
+            else "no rotation keys needed at batch 1, ~105 MB"
+        )
+        with st.spinner(f"{spinner} (20-35 s at n={params.poly_modulus_degree}; {detail}; "
+                        "done once per parameter set, and never written to disk)"):
+            cache[key] = get_owner_zone(params, generate_galois=needs_galois)
     return cache[key]
 
 

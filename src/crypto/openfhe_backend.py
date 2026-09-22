@@ -248,7 +248,19 @@ def run_comparison(config: dict[str, Any], *, timeout: float = 3600.0) -> dict[s
         # stream, not as an error. Saying "output was not JSON" would send the
         # reader looking for a parsing bug instead of at the memory limit, so the
         # signature is named explicitly.
-        if "unexpected EOF" in combined or "OOMKilled" in combined or proc.returncode == 137:
+        # An empty stream is the same event wearing no signature at all. A process
+        # the kernel SIGKILLs writes nothing and leaves no traceback, and Docker
+        # does not always surface that as 137 - this run produced 898 seconds of
+        # work, zero bytes of output, and was reported as a parsing problem. If
+        # the container produced nothing, the one thing it certainly is not is
+        # malformed JSON.
+        produced_nothing = not (proc.stdout or "").strip()
+        if (
+            produced_nothing
+            or "unexpected EOF" in combined
+            or "OOMKilled" in combined
+            or proc.returncode == 137
+        ):
             return {
                 "ok": False,
                 "reason": (
@@ -256,8 +268,16 @@ def run_comparison(config: dict[str, Any], *, timeout: float = 3600.0) -> dict[s
                     "is almost certainly the memory limit: bootstrapping key generation "
                     "at a large ring dimension needs several GB. Check `docker info` for "
                     "the VM's total memory, then either raise it in Docker Desktop's "
-                    "settings or lower --ring-dim, --level-budget and --scaling-mod-size. "
-                    f"Container said: {combined.strip()[:300]}"
+                    "settings or lower --level-budget. Note that --ring-dim cannot go "
+                    "below 65536: OpenFHE refuses every smaller ring for bootstrapping at "
+                    "the 128-bit level, because the minimum bootstrap depth of 20 levels "
+                    "already needs that much. Lowering the security level to fit is not an "
+                    "option worth taking. "
+                    f"Docker exit code {proc.returncode}, "
+                    f"{len(proc.stdout or '')} bytes on stdout. "
+                    + (f"Container said: {combined.strip()[:300]}" if combined.strip()
+                       else "The container wrote nothing at all, which is what a SIGKILL "
+                            "looks like from outside.")
                 ),
                 "status": status.to_dict(),
             }
