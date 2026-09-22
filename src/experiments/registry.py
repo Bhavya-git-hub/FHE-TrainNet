@@ -71,18 +71,42 @@ def looks_like_a_run(path: Path) -> bool:
     )
 
 
+def _recency_key(path: Path) -> tuple[int, str]:
+    """Sort key for `list_runs`, newest first under `reverse=True`.
+
+    A run directory carries its timestamp in its name, so sorting those by name
+    orders them by time. A directory that holds a `results.json` without that
+    prefix is still a real run - `results/reference/` is one, committed so a fresh
+    deployment has measurements to show - but it has no timestamp, and sorting it
+    by name put "reference" above every "2026...." because letters sort after
+    digits. It became "the most recent run", so the dashboard and
+    `make_report.py` reported on the shipped reference instead of the run the
+    user had just finished, with nothing on screen saying so.
+
+    This is the `demos/` defect from before, reintroduced by a directory added
+    for a different reason. Any undated run now sorts below every dated one
+    instead of relying on its name.
+    """
+    return (1, path.name) if RUN_DIR_PATTERN.match(path.name) else (0, path.name)
+
+
 def list_runs(results_dir: Path | None = None) -> list[RunSummary]:
     """Every run directory, newest first.
 
     Sorted by the timestamp embedded in the directory name rather than by string
     order over everything in `results/`, which previously let `demos/` sort above
-    the real runs and become "the most recent run".
+    the real runs and become "the most recent run". See `_recency_key` - the
+    sorting is the whole point of this function and it has been wrong twice.
     """
     base = Path(results_dir or RESULTS_DIR)
     if not base.exists():
         return []
     summaries: list[RunSummary] = []
-    for path in sorted((p for p in base.iterdir() if looks_like_a_run(p)), reverse=True):
+    for path in sorted(
+        (p for p in base.iterdir() if looks_like_a_run(p)),
+        key=_recency_key,
+        reverse=True,
+    ):
         results = path / "results.json"
         if not results.exists():
             summaries.append(

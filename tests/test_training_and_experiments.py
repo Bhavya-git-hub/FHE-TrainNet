@@ -291,3 +291,29 @@ def test_registry_orders_runs_newest_first(tmp_path: Path) -> None:
     assert [r.run_id for r in list_runs(tmp_path)] == [
         "20260301-000000-c-ccc", "20260201-000000-b-bbb", "20260101-000000-a-aaa",
     ]
+
+
+def test_an_undated_run_never_outranks_a_dated_one(tmp_path: Path) -> None:
+    """`results/reference/` is a real run, but it is never the most recent one.
+
+    It holds a `results.json`, so it is listed - it is a genuine recorded run,
+    committed so a fresh deployment has measurements to display. But its name
+    carries no timestamp, and sorting by name put "reference" above every
+    "2026...." because letters sort after digits. It silently became "the latest
+    run": the dashboard and `make_report.py` reported on the shipped reference
+    instead of the run the user had just finished, and nothing on screen said so.
+
+    Undo `_recency_key` and this passes for the dated runs while the reference
+    quietly takes first place again.
+    """
+    for name in ("20260101-000000-a-aaa", "20260301-000000-c-ccc"):
+        (tmp_path / name).mkdir()
+    reference = tmp_path / "reference"
+    reference.mkdir()
+    (reference / "results.json").write_text(
+        json.dumps({"run_id": "reference", "runs": []}), encoding="utf-8"
+    )
+
+    ids = [r.run_id for r in list_runs(tmp_path)]
+    assert ids[0] == "20260301-000000-c-ccc"
+    assert ids == ["20260301-000000-c-ccc", "20260101-000000-a-aaa", "reference"]
