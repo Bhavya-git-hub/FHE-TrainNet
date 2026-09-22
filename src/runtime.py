@@ -82,25 +82,34 @@ def available_memory_mb() -> float | None:
         return None
 
 
-# Streamlit Community Cloud checks the repository out under `/mount/src`; the
-# traceback from a failed deployment shows it. Containers generally advertise
-# themselves through `/.dockerenv` or their own cgroup names.
+# Containers generally advertise themselves through `/.dockerenv` or their own
+# cgroup names.
 _CONTAINER_MARKERS = ("docker", "kubepods", "containerd", "lxc")
 
+# Streamlit Community Cloud checks the repository out under `/mount/src`; the
+# traceback from a failed deployment shows the path.
+_STREAMLIT_CLOUD_MOUNT = Path("/mount/src")
 
-def looks_hosted() -> bool:
-    """Whether this process is running somewhere its memory is not its own.
 
-    Used only to decide what to do when the container's limit cannot be read.
-    A false positive costs throughput; a false negative costs the process.
-    """
-    if Path("/mount/src").is_dir() or Path("/.dockerenv").exists():
+def on_streamlit_community_cloud() -> bool:
+    """Whether this is the free Streamlit tier, whose allowance we know."""
+    return _STREAMLIT_CLOUD_MOUNT.is_dir()
+
+
+def looks_containerised() -> bool:
+    """Whether this process is running somewhere its memory is not its own."""
+    if Path("/.dockerenv").exists():
         return True
     try:
         cgroup = Path("/proc/self/cgroup").read_text(encoding="utf-8")
     except OSError:
         return False
     return any(marker in cgroup for marker in _CONTAINER_MARKERS)
+
+
+def looks_hosted() -> bool:
+    """Either of the above. Kept as one name because callers ask one question."""
+    return on_streamlit_community_cloud() or looks_containerised()
 
 
 def default_config_name() -> str:
@@ -113,16 +122,28 @@ def default_config_name() -> str:
     if override:
         return override
 
+    # Community Cloud first, and ahead of any measurement, because on that tier
+    # no measurement available to this process is trustworthy. The enforced
+    # allowance is roughly 1 GB, but the cgroup file - when it is readable at all
+    # - can report the far larger figure of whatever the container runs inside.
+    # An earlier version of this function read the cgroup first and was killed
+    # anyway: it believed a number that was not the limit being enforced.
+    #
+    # A deployment that really does have the memory says so with
+    # FHE_TRAINNET_CONFIG, which is checked above and wins.
+    if on_streamlit_community_cloud():
+        return "cloud"
+
     limit = cgroup_memory_limit_mb()
     if limit is not None:
         return "cloud" if limit < LOW_MEMORY_THRESHOLD_MB else "demo"
 
-    # No container limit to read. On a hosted tier that is not evidence of a
+    # Some other container, with no limit to read. That is not evidence of a
     # generous allowance - it is the absence of evidence, and `psutil` will
     # happily answer with the host's memory, which is not ours to use. Guessing
     # high kills the process; guessing low costs throughput and says so on
     # screen. The asymmetry decides it.
-    if looks_hosted():
+    if looks_containerised():
         return "cloud"
 
     memory = available_memory_mb()
@@ -160,3 +181,32 @@ def profile_note() -> str | None:
         "processing one sample per step instead of a batch. Everything shown is real; "
         "only the throughput is smaller."
     )
+
+
+def profile_diagnostics() -> dict[str, str]:
+    """Every observation the profile decision was made from, and the decision.
+
+    This exists because a deployed process cannot be interrogated. When the
+    hosted app kept being killed there was no way to tell whether the detection
+    had picked the wrong profile or the right profile was still too large, and
+    the difference decides what to fix. Reporting the inputs alongside the
+    conclusion turns that from a guess into a reading.
+    """
+    override = os.environ.get("FHE_TRAINNET_CONFIG", "").strip()
+    limit = cgroup_memory_limit_mb()
+    try:
+        import psutil
+
+        psutil_mb = f"{psutil.virtual_memory().total / 1e6:.0f} MB"
+    except Exception:  # noqa: BLE001 - absence is reported as unknown
+        psutil_mb = "unavailable"
+    return {
+        "Selected profile": default_config_name(),
+        "FHE_TRAINNET_CONFIG": override or "not set",
+        "Streamlit Community Cloud": str(on_streamlit_community_cloud()),
+        "Containerised": str(looks_containerised()),
+        "cgroup memory limit": f"{limit:.0f} MB" if limit is not None else "not readable",
+        "psutil total (the host's, not ours)": psutil_mb,
+        "Batched profile needs": f"{LOW_MEMORY_THRESHOLD_MB} MB "
+                                 f"(measured peak {BATCHED_PROFILE_PEAK_MB} MB)",
+    }

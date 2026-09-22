@@ -621,10 +621,61 @@ def test_the_profile_is_never_one_the_host_cannot_run(
 
     monkeypatch.delenv("FHE_TRAINNET_CONFIG", raising=False)
     monkeypatch.setattr(runtime, "cgroup_memory_limit_mb", lambda: cgroup_mb)
-    monkeypatch.setattr(runtime, "looks_hosted", lambda: hosted)
+    monkeypatch.setattr(runtime, "on_streamlit_community_cloud", lambda: False)
+    monkeypatch.setattr(runtime, "looks_containerised", lambda: hosted)
     monkeypatch.setattr(runtime, "available_memory_mb", lambda: cgroup_mb or psutil_mb)
 
     assert runtime.default_config_name() == expected
+
+
+@pytest.mark.parametrize("cgroup_mb", [None, 900.0, 2700.0, 8000.0, 64000.0])
+def test_community_cloud_is_decided_before_anything_is_measured(
+    monkeypatch: pytest.MonkeyPatch, cgroup_mb: float | None
+) -> None:
+    """On the free Streamlit tier no memory figure this process can read is the
+    one being enforced.
+
+    The enforced allowance is roughly 1 GB. The cgroup file, when it is readable
+    at all, can report the memory of whatever the container runs inside - tens of
+    gigabytes. A previous fix read the cgroup first and fell back to the hosted
+    check only when it was unreadable, so a container that answered "64 GB" still
+    selected the batched profile and was still killed. The tier has to decide
+    ahead of the measurement, not after it.
+
+    Note the 64000 case: no threshold, however high, rescues an ordering that
+    trusts that number.
+    """
+    from src import runtime
+
+    monkeypatch.delenv("FHE_TRAINNET_CONFIG", raising=False)
+    monkeypatch.setattr(runtime, "on_streamlit_community_cloud", lambda: True)
+    monkeypatch.setattr(runtime, "cgroup_memory_limit_mb", lambda: cgroup_mb)
+    monkeypatch.setattr(runtime, "available_memory_mb", lambda: 64000.0)
+
+    assert runtime.default_config_name() == "cloud"
+
+
+def test_the_diagnostics_report_every_input_to_the_decision() -> None:
+    """A deployed process cannot be interrogated, so it has to volunteer this.
+
+    While the hosted app was being killed, nothing on screen distinguished
+    "picked the wrong profile" from "picked the right profile and it is still too
+    big" - and those want opposite fixes. Reporting the inputs next to the
+    conclusion is what turned the second round of this from a guess into a
+    reading.
+    """
+    from src.runtime import profile_diagnostics
+
+    reported = profile_diagnostics()
+    for field in (
+        "Selected profile",
+        "FHE_TRAINNET_CONFIG",
+        "Streamlit Community Cloud",
+        "cgroup memory limit",
+        "Batched profile needs",
+    ):
+        assert field in reported, f"{field} is not reported"
+    assert reported["Selected profile"] in {"cloud", "demo", "benchmark", "fast_smoke"}
 
 
 def test_the_threshold_clears_the_measured_peak() -> None:

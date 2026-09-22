@@ -42,6 +42,7 @@ from src.crypto.backend import RefreshKind
 from src.data.loader import load_dataset
 from src.experiments.registry import list_runs
 from src.model.activation import ACTIVATIONS
+from src.runtime import profile_diagnostics
 
 page_setup("FHE-TrainNet")
 st.caption(
@@ -70,6 +71,20 @@ workload, and reports what was measured.
 )
 
 profile_banner()
+
+with st.expander("Why this profile? (what this process can actually see)"):
+    # Collapsed, because it is diagnostic rather than part of the argument. It
+    # is here at all because a deployed process cannot be interrogated: when the
+    # hosted app was being killed, nothing on screen distinguished "picked the
+    # wrong profile" from "picked the right one and it is still too big", and
+    # those want opposite fixes.
+    _diagnostics = profile_diagnostics()
+    st.table(
+        {"Observation": list(_diagnostics), "Value": list(_diagnostics.values())}
+    )
+    st.caption(
+        "Set `FHE_TRAINNET_CONFIG` to pin a profile regardless of what this says."
+    )
 
 st.markdown("### What restores that capacity here")
 refresh_banner(RefreshKind.CLIENT_AIDED)
