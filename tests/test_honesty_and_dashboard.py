@@ -498,3 +498,84 @@ def test_docker_output_is_decoded_as_utf8() -> None:
     source = (ROOT / "src" / "crypto" / "openfhe_backend.py").read_text(encoding="utf-8")
     assert 'encoding="utf-8"' in source
     assert 'errors="replace"' in source
+
+
+# --- the dashboard must be importable the way Streamlit actually imports it ----
+
+ENTRY_SCRIPTS = [ROOT / "app" / "dashboard" / "Home.py"] + sorted(
+    (ROOT / "app" / "dashboard" / "pages").glob("*.py")
+)
+
+
+@pytest.mark.parametrize("script", ENTRY_SCRIPTS, ids=lambda p: p.name)
+def test_entry_scripts_put_the_repo_root_on_sys_path_first(script: Path) -> None:
+    """Every Streamlit entry script must add the repository root before using it.
+
+    Streamlit inserts only the main script's own directory into `sys.path`
+    (`streamlit/runtime/scriptrunner/exec_code.py`), never the repository root.
+    Every page under `pages/` did this from the start. `Home.py` - the file
+    Streamlit is actually pointed at - did not, and on a development machine the
+    root arrives anyway via the working directory, so the omission was invisible
+    through the entire build. On Streamlit Cloud it does not arrive: the app
+    died with ModuleNotFoundError before rendering a line.
+
+    Parametrising over all eleven rather than testing `Home.py` alone is the
+    point. Ten files were right and one was wrong, and nothing distinguished
+    them; the next page added will be checked the same way.
+
+    Asserting the order matters as much as the presence. A bootstrap that sits
+    below the first `app.`/`src.` import is dead code - the import above it has
+    already raised.
+    """
+    lines = script.read_text(encoding="utf-8").splitlines()
+    bootstrap = next(
+        (i for i, ln in enumerate(lines) if "sys.path.insert(0, str(" in ln), None
+    )
+    first_repo_import = next(
+        (
+            i
+            for i, ln in enumerate(lines)
+            if ln.startswith(("from app.", "from src.", "import app", "import src"))
+        ),
+        None,
+    )
+    assert bootstrap is not None, (
+        f"{script.name} imports the repository but never puts its root on sys.path"
+    )
+    assert first_repo_import is not None
+    assert bootstrap < first_repo_import, (
+        f"{script.name} adds the repo root at line {bootstrap + 1}, below its first "
+        f"repository import at line {first_repo_import + 1} - the import raises first"
+    )
+
+
+def test_home_imports_with_only_the_script_dir_on_sys_path() -> None:
+    """Prove the bootstrap works, rather than only that its text is present.
+
+    The static test above checks ordering; this one reproduces Streamlit Cloud's
+    actual import environment and runs the real file.
+    """
+    import subprocess
+    import sys
+    import textwrap
+
+    probe = textwrap.dedent(
+        """
+        import os, sys, runpy
+        sys.path.insert(0, os.path.join(os.getcwd(), "app", "dashboard"))
+        sys.path = [p for p in sys.path if p not in ("", ".", os.getcwd())]
+        try:
+            runpy.run_path("app/dashboard/Home.py", run_name="__main__")
+        except ModuleNotFoundError as exc:
+            print("MISSING", exc)
+            raise SystemExit(1)
+        except Exception:
+            pass          # no Streamlit runtime in bare mode; imports resolved
+        print("RESOLVED")
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True, text=True, errors="replace", cwd=ROOT,
+    )
+    assert "RESOLVED" in result.stdout, result.stdout + result.stderr[-500:]

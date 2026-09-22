@@ -10,6 +10,22 @@ the underlying library can and cannot actually do.
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
+
+# Every page under `pages/` already does this. Home.py did not, and Home.py is
+# the one Streamlit is pointed at: it inserts only the main script's own
+# directory into sys.path (`streamlit/runtime/scriptrunner/exec_code.py`), never
+# the repository root. On a development machine the root arrives anyway via the
+# working directory, so the omission stayed invisible for the whole build. On
+# Streamlit Cloud it does not, and the app died with ModuleNotFoundError on the
+# import below before rendering a line.
+#
+# Named `_ROOT` because `ROOT` is imported from `common` a few lines down, and
+# the same path under two names reads like two different things.
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 import streamlit as st
 
