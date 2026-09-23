@@ -16,8 +16,10 @@ import sys
 import textwrap
 from pathlib import Path
 
+import numpy as np
 import pytest
 
+from app.dashboard.ciphertext_view import byte_entropy, hex_dump
 from src.data.loader import load_dataset, prepare
 from src.experiments.config import ExperimentConfig, Mode
 from src.experiments.runner import run_single
@@ -95,6 +97,46 @@ def test_the_walkthrough_imports_with_only_its_own_directory_on_sys_path() -> No
             f"({result.stderr.strip()[:120]})"
         )
     assert "RESOLVED" in result.stdout, result.stdout + result.stderr[-500:]
+
+
+def test_the_hex_dump_reports_absolute_file_offsets() -> None:
+    """The payload window is read from the middle of the ciphertext.
+
+    If the dump numbered its rows from zero the page would label bytes 2048
+    onward as byte 0, and a viewer comparing two windows would believe they were
+    looking at the same part of two files when they were not.
+    """
+    dumped = hex_dump(bytes(range(0x40, 0x50)), start=2048, width=16)
+    assert dumped.startswith("00000800  "), dumped
+
+    # Printable bytes render as themselves, non-printable as a dot.
+    assert dumped.endswith("|@ABCDEFGHIJKLMNO|"), dumped
+    assert hex_dump(b"\x00\x01\x02").endswith("|...|")
+
+
+def test_the_hex_dump_pads_a_short_final_row() -> None:
+    """A ragged last row would slide its ASCII column under the hex column."""
+    rows = hex_dump(b"ABCDEFGHIJKLMNOPQR", width=16).splitlines()
+    assert len(rows) == 2
+    full, short = rows
+    assert full.index("|") == short.index("|"), f"\n{full}\n{short}"
+
+
+def test_byte_entropy_brackets_the_range_it_will_be_shown_in() -> None:
+    """The page prints this number against a stated maximum of 8.000.
+
+    Uniform bytes must reach that maximum and a single repeated byte must reach
+    zero, or the figure on screen is being compared against the wrong ceiling.
+    """
+    assert byte_entropy(np.full(256, 1000)) == pytest.approx(8.0)
+
+    one_value_only = np.zeros(256, dtype=int)
+    one_value_only[7] = 5000
+    assert byte_entropy(one_value_only) == pytest.approx(0.0)
+
+    # An empty histogram means nothing was measured. Zero is the honest answer
+    # and a ZeroDivisionError inside a Streamlit rerun is not.
+    assert byte_entropy(np.zeros(256, dtype=int)) == 0.0
 
 
 def test_both_encrypted_policies_return_a_decryptable_model(smoke_config) -> None:

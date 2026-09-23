@@ -39,8 +39,10 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+import numpy as np
 import streamlit as st
 
+from app.dashboard.ciphertext_view import byte_entropy, hex_dump
 from app.dashboard.common import (
     fmt,
     metric_note,
@@ -128,6 +130,18 @@ def parse_values(text: str) -> tuple[list[float], str | None]:
     return values, None
 
 
+# How much of each ciphertext is kept for the inspector. A ciphertext is about
+# 2 MB and there can be eight of them, so keeping them whole across every rerun
+# would cost 16 MB on a host with 1 GB. Four kilobytes is enough for both windows
+# below and costs 32 KB in total.
+INSPECT_BYTES = 4096
+DUMP_BYTES = 256
+
+# Where the second window looks. Far enough past the container header to be
+# inside the ciphertext body at every parameter set this page can run with.
+PAYLOAD_OFFSET = 2048
+
+
 # The CKKS parameters do not depend on the sample count, so the key zone this
 # section uses is the same one the training below will reuse from cache.
 base_config = walkthrough_config(16)
@@ -178,6 +192,18 @@ if st.button("Encrypt these values", type="primary", disabled=bool(problem)):
     except MissingKeyError as exc:
         refusal = str(exc)
 
+    # Serialize each ciphertext exactly once. These are two-megabyte objects and
+    # the previous version called `serialize()` again for every view of them.
+    packed_raw = packed.raw.serialize()
+    per_value_raw = [ct.raw.serialize() for ct in per_value]
+    again_raw = again.raw.serialize()
+
+    # Measured over the whole ciphertext, which is then dropped - only the
+    # 256 counts survive into session state.
+    histogram = np.bincount(
+        np.frombuffer(packed_raw, dtype=np.uint8), minlength=256
+    )
+
     st.session_state["walkthrough_encryption"] = {
         "fingerprint": owner.secret_key_fingerprint(),
         "refusal": refusal,
@@ -185,11 +211,21 @@ if st.button("Encrypt these values", type="primary", disabled=bool(problem)):
         "recovered": recovered,
         "packed_seconds": packed_seconds,
         "unpack_seconds": unpack_seconds,
-        "packed_bytes": compute_zone.serialized_size(packed),
-        "packed_head": packed.raw.serialize()[:48].hex(),
-        "per_value_heads": [ct.raw.serialize()[:32].hex() for ct in per_value],
+        "packed_bytes": len(packed_raw),
+        "packed_head": packed_raw[:48].hex(),
+        "per_value_heads": [raw[:32].hex() for raw in per_value_raw],
         "per_value_decrypted": [owner.decrypt(ct)[0] for ct in per_value],
-        "repeat_head": again.raw.serialize()[:32].hex(),
+        "repeat_head": again_raw[:32].hex(),
+        # For the inspector below.
+        "packed_inspect": packed_raw[:INSPECT_BYTES],
+        "per_value_inspect": [raw[:INSPECT_BYTES] for raw in per_value_raw],
+        "per_value_bytes": [len(raw) for raw in per_value_raw],
+        "repeat_inspect": again_raw[:INSPECT_BYTES],
+        "byte_histogram": histogram.tolist(),
+        "entropy_bits": byte_entropy(histogram),
+        # The one full ciphertext kept, so the download button hands over real
+        # bytes rather than a sample of them.
+        "packed_full": packed_raw,
     }
 
 enc = st.session_state.get("walkthrough_encryption")
@@ -256,10 +292,68 @@ else:
         "wrong by about the same amount."
     )
 
+    st.markdown("**What the encrypted data actually looks like**")
+    labels = [f"{v:.10g}" for v in enc["values"]]
+    packed_label = f"all {len(enc['values'])} values, packed into one ciphertext"
+    choice = st.selectbox(
+        "Ciphertext to inspect", [*labels, packed_label], index=len(labels)
+    )
+    window = st.radio(
+        "Part of the file",
+        ["Start of file", f"Inside the payload (offset {PAYLOAD_OFFSET:,})"],
+        horizontal=True,
+        help="The start of the file is container metadata. The payload window is "
+             "where the ciphertext proper begins.",
+    )
+
+    if choice == packed_label:
+        blob, total = enc["packed_inspect"], enc["packed_bytes"]
+    else:
+        index = labels.index(choice)
+        blob, total = enc["per_value_inspect"][index], enc["per_value_bytes"][index]
+
+    offset = 0 if window == "Start of file" else PAYLOAD_OFFSET
+    st.code(hex_dump(blob[offset : offset + DUMP_BYTES], start=offset), language=None)
+
+    if offset == 0:
+        st.caption(
+            "**These first bytes are not your encrypted numbers.** They are the "
+            "serializer's container: a protobuf field header, a length, and at offset "
+            "`0x18` the four bytes `28 b5 2f fd`, which are the Zstandard magic number "
+            "- Microsoft SEAL compresses on serialize. The same structure sits at the "
+            "same offsets in every ciphertext here, because it describes the file "
+            "rather than the values in it. Switch to the payload window to look at the "
+            "ciphertext itself."
+        )
+    else:
+        st.caption(
+            f"Bytes {offset:,} to {offset + DUMP_BYTES:,} of {total:,}. "
+            f"You are {(offset + DUMP_BYTES) / total:.2%} of the way into a file that "
+            "holds a handful of numbers."
+        )
+
     st.markdown("**The same number, encrypted twice**")
-    st.code(
-        f"{enc['values'][0]:.10g}  ->  {enc['per_value_heads'][0]}\n"
-        f"{enc['values'][0]:.10g}  ->  {enc['repeat_head']}",
+    st.caption(
+        f"Both columns are `{enc['values'][0]:.10g}`, encrypted twice with the same "
+        f"key, shown at the same offset."
+    )
+    # Eight bytes per row rather than sixteen: at sixteen the two dumps wrap
+    # inside half-width columns and the comparison they exist for is lost.
+    left, right = st.columns(2)
+    left.code(
+        hex_dump(
+            enc["per_value_inspect"][0][PAYLOAD_OFFSET : PAYLOAD_OFFSET + 64],
+            start=PAYLOAD_OFFSET,
+            width=8,
+        ),
+        language=None,
+    )
+    right.code(
+        hex_dump(
+            enc["repeat_inspect"][PAYLOAD_OFFSET : PAYLOAD_OFFSET + 64],
+            start=PAYLOAD_OFFSET,
+            width=8,
+        ),
         language=None,
     )
     if enc["per_value_heads"][0] != enc["repeat_head"]:
@@ -275,6 +369,45 @@ else:
             "a finding rather than a coincidence."
         )
 
+    st.markdown("**How random those bytes are**")
+    left, right = st.columns([1, 3])
+    left.metric(
+        "Shannon entropy",
+        f"{enc['entropy_bits']:.3f} / 8.000",
+        help="Bits per byte, measured across the whole packed ciphertext - "
+             f"all {enc['packed_bytes']:,} bytes of it.",
+    )
+    right.bar_chart(
+        {"occurrences": enc["byte_histogram"]},
+        x_label="byte value (0-255)",
+        y_label="times it occurs",
+        height=200,
+    )
+    # Counted rather than asserted. "All 256 values appear" is almost certainly
+    # true of two megabytes of compressed ciphertext, but a caption that states it
+    # without looking would be wrong the one time it is not.
+    present = sum(1 for count in enc["byte_histogram"] if count)
+    st.caption(
+        f"How often each of the 256 possible byte values occurs. {present} of 256 "
+        "appear in this ciphertext."
+    )
+    st.warning(
+        "**A flat histogram is not evidence of security.** It shows only that the "
+        "bytes carry no pattern visible at this level. The serialization is "
+        "zstd-compressed, and compression raises entropy on its own, so part of that "
+        "figure is the compressor rather than the cipher. The actual guarantee comes "
+        "from the hardness of Ring-LWE, which no picture on this page can demonstrate."
+    )
+
+    st.download_button(
+        "Download this ciphertext",
+        data=enc["packed_full"],
+        file_name="ciphertext.bin",
+        mime="application/octet-stream",
+        help=f"The real {enc['packed_bytes'] / 1e6:.2f} MB file, to open in a hex "
+             "editor rather than take on trust.",
+    )
+
     st.markdown("**Who can read it**")
     st.caption(f"Data-owner zone holds the secret key `{enc['fingerprint']}`.")
     if enc["refusal"]:
@@ -289,12 +422,6 @@ else:
             "invalidates the trust boundary this project claims. Treat every other "
             "result on this page as unverified until it is explained."
         )
-
-    st.code(
-        f"first 48 bytes of the packed ciphertext holding all "
-        f"{len(enc['values'])} values:\n{enc['packed_head']}",
-        language=None,
-    )
 
 # --- The arithmetic, stated before the training runs confirm it or fail to. ----
 
